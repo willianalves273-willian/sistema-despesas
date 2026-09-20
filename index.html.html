@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistema de Despesas</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f3f4f6;color:#222;font-family:Arial,sans-serif}
+header{background:#1f2937;color:#fff;padding:18px 24px}
+header h1{margin:0 0 5px;font-size:28px}
+header p{margin:0;font-size:15px}
+nav{background:#fff;padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;box-shadow:0 2px 5px #ccc;position:sticky;top:0;z-index:20}
+button{border:0;border-radius:7px;padding:11px 15px;background:#2563eb;color:#fff;font-size:15px;cursor:pointer}
+button:hover{opacity:.9}
+button.sec{background:#6b7280}.danger{background:#dc2626}.green{background:#15803d}.orange{background:#ea580c}
+.container{max-width:1200px;margin:20px auto;padding:0 15px}
+.card{background:#fff;padding:20px;margin-bottom:20px;border-radius:10px;box-shadow:0 2px 8px #ddd}
+.oculto{display:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px}
+.stat{background:#f8fafc;padding:20px;border-radius:10px}
+.stat h3{margin:0 0 12px}.valor{font-size:25px;font-weight:bold}
+.formgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+label{font-weight:bold;font-size:14px;display:block}
+input,select,textarea{width:100%;padding:10px;margin-top:5px;border:1px solid #bbb;border-radius:6px;font-size:15px}
+textarea{min-height:70px;resize:vertical}
+.full{grid-column:1/-1}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+.tabela{overflow:auto}
+table{width:100%;border-collapse:collapse;margin-top:15px;min-width:850px}
+th,td{border:1px solid #ccc;padding:9px;text-align:left;vertical-align:top}
+th{background:#e5e7eb}
+.money{text-align:right;white-space:nowrap}
+.nota{border:1px dashed #999;padding:14px;margin:12px 0;background:#fffdf7;border-radius:6px}
+.nota-head{display:flex;justify-content:space-between;gap:15px;border-bottom:1px dashed #aaa;padding-bottom:8px;margin-bottom:8px}
+.nota-total{font-size:18px;font-weight:bold;text-align:right;margin-top:10px}
+.aviso{padding:12px;border:1px solid #f0c36d;background:#fff7e6;border-radius:7px;margin:10px 0}
+.status{font-size:14px;margin-top:8px}
+@media(max-width:850px){.formgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:550px){.formgrid{grid-template-columns:1fr}nav button{flex:1 1 45%}}
+@media print{
+nav,.no-print,header .status{display:none!important}
+body{background:#fff}.container{max-width:none;margin:0;padding:0}.card{box-shadow:none;border:0;margin:0;padding:8px}
+@page{size:A4 portrait;margin:12mm}
+}
+</style>
+</head>
+<body>
+<header>
+<h1>Sistema de Despesas</h1>
+<p>Controle de despesas, fornecedores, responsabilidades e relatórios</p>
+<div id="status" class="status">● Sistema local</div>
+</header>
+
+<nav class="no-print">
+<button onclick="mostrar('inicio')">Início</button>
+<button onclick="mostrar('nova')">Nova Despesa</button>
+<button onclick="mostrar('lancamento')">Lançamento</button>
+<button onclick="mostrar('despesas')">Despesas</button>
+<button onclick="mostrar('relatorios')">Relatórios</button>
+<button onclick="mostrar('resumo')">Resumo</button>
+<button onclick="backup()">💾 Backup</button>
+<button onclick="window.print()">🖨️ Imprimir</button>
+</nav>
+
+<div class="container">
+
+<section id="inicio" class="card">
+<h2>Painel</h2>
+<div class="grid">
+<div class="stat"><h3>Despesas registradas</h3><div id="sQtd" class="valor">0</div></div>
+<div class="stat"><h3>Total das despesas</h3><div id="sTotal" class="valor">R$ 0,00</div></div>
+<div class="stat"><h3>Total José</h3><div id="sJose" class="valor">R$ 0,00</div></div>
+<div class="stat"><h3>Total Willian</h3><div id="sWillian" class="valor">R$ 0,00</div></div>
+</div>
+<div class="aviso">Cada despesa finalizada é gravada no histórico permanente. Excluir uma despesa da lista operacional não apaga o registro histórico.</div>
+</section>
+
+
+<section id="lancamento" class="card oculto">
+<h2>Lançamento de despesas</h2>
+<div class="aviso">
+<b>Como funciona:</b> cada despesa é apenas adicionada ao lançamento.
+Você escolhe a responsabilidade de cada uma e pode continuar cadastrando outras.
+Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO</b>.
+</div>
+
+<div id="pendentesResumo" style="margin:15px 0;font-size:17px"></div>
+
+<div class="tabela-responsiva">
+<table>
+<thead>
+<tr>
+<th>Data</th><th>Fornecedor</th><th>Produto</th><th>Total</th>
+<th>Responsabilidade</th><th>José</th><th>Willian</th><th>Ação</th>
+</tr>
+</thead>
+<tbody id="pendentesBody"></tbody>
+</table>
+</div>
+
+<div id="pixLancamento" class="aviso" style="margin-top:15px;font-size:18px">
+<b>Acerto via PIX:</b> José deve devolver para Willian: <b>R$ 0,00</b>
+</div>
+
+<div class="actions">
+<button onclick="finalizarLancamento()" class="green">✓ FINALIZAR LANÇAMENTO</button>
+<button onclick="limparLancamento()" class="sec">Limpar lançamento</button>
+<button onclick="mostrar('nova')" class="sec">+ Lançar outra despesa</button>
+</div>
+</section>
+
+<section id="nova" class="card oculto">
+<h2 id="tituloNova">Nova Despesa</h2>
+<div class="formgrid">
+<div><label>Data da despesa<input id="data" type="date"></label></div>
+<div><label>Fornecedor
+<select id="fornecedor">
+<option>SUPERMERCADO TABULEIRO</option>
+<option>SUPERMERCADO BOA OPÇÃO</option>
+<option>UNIEPAZ</option>
+<option>FIBROM</option>
+<option>SAAE</option>
+<option>CEMIG</option>
+<option>ADILSON</option>
+<option>OUTROS MERCADOS</option>
+</select>
+</label></div>
+<div><label>Nota fiscal<input id="nota" value="012345" placeholder="Número da nota"></label></div>
+<div><label>Categoria<select id="categoria"><option>SUPERMERCADO</option><option>ALIMENTAÇÃO</option><option>CASA</option><option>TRANSPORTE</option><option>SAÚDE</option><option>OUTROS</option></select></label></div>
+<div><label>Descrição / produto
+<select id="produto" onchange="preencherProdutoSelecionado()">
+<option value="">Selecione um produto do Estoque do Sistema de Vendas</option>
+</select>
+</label>
+<div id="produtoInfo" style="font-size:12px;color:#666;margin-top:5px"></div>
+</div>
+<div><label>Valor total<input id="valor" type="number" min="0" step="0.01" placeholder="0,00"></label></div>
+<div><label>Responsabilidade<select id="responsabilidade" onchange="ajustarResponsabilidade()"><option>JOSÉ</option><option>WILLIAN</option><option>DIVIDIDO</option></select></label></div>
+<div><label>Valor José<input id="valorJose" type="number" min="0" step="0.01" placeholder="0,00"></label></div>
+<div><label>Valor Willian<input id="valorWillian" type="number" min="0" step="0.01" placeholder="0,00"></label></div>
+<div class="full"><label>Observação<textarea id="obs" placeholder="Observações da compra"></textarea></label></div>
+</div>
+<div class="actions">
+<button onclick="adicionarAoLancamento()" class="green">+ Adicionar ao lançamento</button>
+<button onclick="limparFormulario()" class="sec">Limpar</button>
+<button onclick="cancelarEdicao()" class="sec oculto" id="btnCancelar">Cancelar edição</button>
+</div>
+</section>
+
+<section id="despesas" class="card oculto">
+<h2>Despesas registradas</h2>
+<div class="actions no-print">
+<input id="busca" oninput="renderDespesas()" placeholder="Pesquisar fornecedor, produto, nota ou categoria..." style="max-width:500px">
+</div>
+<div id="listaDespesas"></div>
+</section>
+
+<section id="relatorios" class="card oculto">
+<h2>Relatórios</h2>
+<div class="actions no-print">
+<label style="width:220px">Mês
+<select id="mesRel" onchange="renderRelatorio()"></select>
+</label>
+<button onclick="imprimirRelatorio()">🖨️ Imprimir relatório do mês</button>
+<button onclick="selecionarTodosRelatorio()">☑️ Selecionar tudo</button>
+<button onclick="limparSelecaoRelatorio()">↩️ Limpar seleção</button>
+<button onclick="excluirSelecionadasRelatorio()" class="danger">🔒 Excluir selecionadas</button>
+<button onclick="excluirMesRelatorio()" class="danger">🔒 Excluir mês inteiro</button>
+<button onclick="limparRelatorioComSenha()" class="danger">🔒 Zerar histórico</button>
+</div>
+<div id="relatorioConteudo"></div>
+<div class="aviso" style="margin-top:15px">
+<b>Histórico permanente:</b> o relatório mostra somente as despesas que foram
+<b>finalizadas</b> e gravadas no histórico. Ele continua acumulando os lançamentos
+mês após mês e ano após ano, sem limite de período.
+<br><br>
+<b>Importante:</b> excluir uma despesa da tela "Despesas" não altera este histórico.
+A exclusão de registros do histórico só pode ser feita com a senha <b>8526</b>.
+Você pode selecionar compras individuais, excluir um mês inteiro ou, em último caso, zerar todo o histórico.
+</div>
+</section>
+
+<section id="resumo" class="card oculto">
+<h2>Resumo anual</h2>
+<div class="grid">
+<div class="stat"><h3>Total geral</h3><div id="rTotal" class="valor">R$ 0,00</div></div>
+<div class="stat"><h3>Total José</h3><div id="rJose" class="valor">R$ 0,00</div></div>
+<div class="stat"><h3>Total Willian</h3><div id="rWillian" class="valor">R$ 0,00</div></div>
+<div class="stat"><h3>Despesas divididas</h3><div id="rDiv" class="valor">0</div></div>
+</div>
+<div id="resumoMeses"></div>
+</section>
+
+</div>
+
+<script>
+const KEY="sistema_despesas_jose_willian_v1";
+const HISTKEY="sistema_despesas_historico_v1";
+let despesas=JSON.parse(localStorage.getItem(KEY)||"[]");
+let historico=JSON.parse(localStorage.getItem(HISTKEY)||"[]");
+let editandoId=null;
+
+function dinheiro(v){return Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+function hoje(){return new Date().toISOString().slice(0,10)}
+function salvar(){localStorage.setItem(KEY,JSON.stringify(despesas));localStorage.setItem(HISTKEY,JSON.stringify(historico));}
+function mostrar(id){
+ document.querySelectorAll("section").forEach(s=>s.classList.add("oculto"));
+ document.getElementById(id).classList.remove("oculto");
+ if(id==="inicio")renderPainel();
+ if(id==="despesas")renderDespesas();
+ if(id==="relatorios"){montarMeses();renderRelatorio();}
+ if(id==="resumo")renderResumo();
+}
+function ajustarResponsabilidade(){
+ const r=document.getElementById("responsabilidade").value;
+ const total=Number(document.getElementById("valor").value)||0;
+ if(r==="JOSÉ"){valorJose.value=total;valorWillian.value=0}
+ if(r==="WILLIAN"){valorJose.value=0;valorWillian.value=total}
+ if(r==="DIVIDIDO"){valorJose.value=(total/2).toFixed(2);valorWillian.value=(total/2).toFixed(2)}
+}
+valor.addEventListener("input",ajustarResponsabilidade);
+
+
+function produtosDoSistemaVendas(){
+  try{
+    const dados=JSON.parse(localStorage.getItem("produtos_vendas")||"[]");
+    return Array.isArray(dados)?dados:[];
+  }catch(e){return []}
+}
+function carregarProdutosVendas(){
+  const select=document.getElementById("produto");
+  if(!select)return;
+  const atual=select.value;
+  const lista=produtosDoSistemaVendas();
+  select.innerHTML='<option value="">Selecione um produto do Estoque do Sistema de Vendas</option>';
+  lista.forEach((p,i)=>{
+    const id=p.id??i;
+    const nome=p.nome??p.produto??p.descricao??"Produto";
+    const opt=document.createElement("option");
+    opt.value=String(id);
+    opt.textContent=nome;
+    opt.dataset.nome=nome;
+    opt.dataset.preco=p.preco??"";
+    opt.dataset.estoque=p.estoque_inteiro??p.estoque??"";
+    select.appendChild(opt);
+  });
+  if([...select.options].some(o=>o.value===atual))select.value=atual;
+  preencherProdutoSelecionado();
+}
+function preencherProdutoSelecionado(){
+  const select=document.getElementById("produto"),info=document.getElementById("produtoInfo");
+  if(!select||!info)return;
+  const opt=select.options[select.selectedIndex];
+  if(!opt||!opt.value){info.textContent="";return}
+  const preco=Number(opt.dataset.preco);
+  const estoque=opt.dataset.estoque;
+  const partes=[];
+  if(Number.isFinite(preco)&&opt.dataset.preco!=="")partes.push("Preço cadastrado: "+dinheiro(preco));
+  if(estoque!=="")partes.push("Estoque: "+estoque);
+  info.textContent=partes.join("  |  ");
+}
+
+function limparFormulario(){
+ editandoId=null;
+ tituloNova.textContent="Nova Despesa";btnCancelar.classList.add("oculto");
+ data.value=hoje();for(const id of ["obs"])document.getElementById(id).value="";fornecedor.value="SUPERMERCADO TABULEIRO";nota.value="012345";carregarProdutosVendas();
+ valor.value="";responsabilidade.value="JOSÉ";valorJose.value="";valorWillian.value="";
+ categoria.value="SUPERMERCADO";
+}
+function cancelarEdicao(){limparFormulario();mostrar("despesas")}
+function adicionarAoLancamento(){
+ const total=Number(valor.value)||0;
+ const j=Number(valorJose.value)||0;
+ const w=Number(valorWillian.value)||0;
+
+ if(!data.value||!fornecedor.value.trim()||!produto.value.trim()||total<=0){
+   alert("Preencha data, fornecedor, produto e valor total.");
+   return;
+ }
+ if(Math.abs((j+w)-total)>0.01){
+   alert("O valor de José + o valor de Willian deve ser igual ao valor total.");
+   return;
+ }
+
+ const optProduto=produto.options[produto.selectedIndex];
+ const nomeProduto=optProduto?.dataset.nome||optProduto?.textContent||"";
+ const produtoId=optProduto?.value||"";
+
+ const item={
+   idPendente:String(Date.now())+"_"+Math.random().toString(16).slice(2),
+   data:data.value,
+   fornecedor:fornecedor.value.trim(),
+   nota:nota.value.trim()||"012345",
+   categoria:categoria.value,
+   produto:nomeProduto,
+   produtoId:produtoId,
+   valor:total,
+   responsabilidade:responsabilidade.value,
+   valorJose:j,
+   valorWillian:w,
+   obs:obs.value.trim(),
+   criadoEm:new Date().toISOString()
+ };
+
+ const lista=lerLancamentos();
+ lista.push(item);
+salvarLancamentos(lista);
+
+ alert("Despesa adicionada ao lançamento.\n\nVocê pode lançar outra despesa.");
+ limparFormulario();
+ mostrar("nova");
+}
+function editar(id){
+ const d=despesas.find(x=>x.id===id);if(!d)return;
+ editandoId=id;tituloNova.textContent="Editar Despesa";btnCancelar.classList.remove("oculto");
+ for(const k of ["data","categoria","valor","responsabilidade","valorJose","valorWillian","obs"])document.getElementById(k).value=d[k]??"";fornecedor.value=d.fornecedor||"SUPERMERCADO TABULEIRO";nota.value=d.nota||"012345";carregarProdutosVendas();const ps=produtosDoSistemaVendas().find(p=>String(p.id??"")===String(d.produtoId??"") || String(p.nome??p.produto??p.descricao??"")===String(d.produto??""));if(ps)produto.value=String(ps.id??"");preencherProdutoSelecionado();
+ mostrar("nova");
+}
+function excluir(id){
+ if(!confirm("Excluir esta despesa da lista operacional? O histórico permanente NÃO será apagado."))return;
+ despesas=despesas.filter(x=>x.id!==id);salvar();renderDespesas();renderPainel();
+}
+function descricao(d){return `${d.produto}${d.nota?`<br><small>NF: ${d.nota}</small>`:""}`}
+function renderDespesas(){
+ const q=(busca.value||"").toLowerCase();
+ const lista=despesas.filter(d=>JSON.stringify(d).toLowerCase().includes(q));
+ listaDespesas.innerHTML=lista.length?lista.map(d=>`<div class="nota">
+ <div class="nota-head"><b>${d.fornecedor}</b><span>${new Date(d.data+"T00:00:00").toLocaleDateString("pt-BR")}</span></div>
+ <div><b>Produto:</b> ${descricao(d)}</div>
+ <div><b>Categoria:</b> ${d.categoria} &nbsp; <b>Responsabilidade:</b> ${d.responsabilidade}</div>
+ <div><b>José:</b> ${dinheiro(d.valorJose)} &nbsp; <b>Willian:</b> ${dinheiro(d.valorWillian)}</div>
+ <div class="nota-total">Total: ${dinheiro(d.valor)}</div>
+ <div class="actions no-print"><button onclick="editar(${d.id})">Editar</button><button class="danger" onclick="excluir(${d.id})">Excluir</button></div>
+ </div>`).join(""):"<p>Nenhuma despesa encontrada.</p>";
+}
+function montarMeses(){
+ const s=mesRel;
+ const atual=s.value;
+ const conjunto=new Set();
+
+ historico.forEach(d=>{
+   if(d && typeof d.data==="string" && /^\d{4}-\d{2}/.test(d.data)){
+     conjunto.add(d.data.slice(0,7));
+   }
+ });
+
+ const agora=new Date();
+ conjunto.add(`${agora.getFullYear()}-${String(agora.getMonth()+1).padStart(2,"0")}`);
+
+ const meses=[...conjunto].sort().reverse();
+
+ s.innerHTML=meses.map(m=>
+   `<option value="${m}">${new Date(m+"-01T00:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</option>`
+ ).join("");
+
+ s.value=(atual && meses.includes(atual)) ? atual : meses[0];
+}
+function doMes(d){
+ const data=String(d?.data||"");
+ return /^\d{4}-\d{2}/.test(data)?data.slice(0,7):"sem-data";
+}
+function renderRelatorio(){
+ const mes=mesRel.value;
+ const lista=historico.filter(d=>doMes(d)===mes);
+ const total=lista.reduce((s,d)=>s+(Number(d.valor)||0),0),j=lista.reduce((s,d)=>s+(Number(d.valorJose)||0),0),w=lista.reduce((s,d)=>s+(Number(d.valorWillian)||0),0);
+ relatorioConteudo.innerHTML=`<div class="grid">
+ <div class="stat"><h3>Compras finalizadas</h3><div class="valor">${lista.length}</div></div>
+ <div class="stat"><h3>Total do mês</h3><div class="valor">${dinheiro(total)}</div></div>
+ <div class="stat"><h3>José</h3><div class="valor">${dinheiro(j)}</div></div>
+ <div class="stat"><h3>Willian</h3><div class="valor">${dinheiro(w)}</div></div></div>
+ <h3>Histórico permanente</h3>
+ <div class="tabela"><table><thead><tr><th>Sel.</th><th>Compra</th><th>Data</th><th>Fornecedor</th><th>Nota fiscal</th><th>Produto</th><th>Responsabilidade</th><th>José</th><th>Willian</th><th>Total</th></tr></thead>
+ <tbody>${lista.length?lista.map(d=>`<tr><td><input type="checkbox" class="checkRelatorio" data-id="${String(d.id)}"></td><td>#${d.numero}</td><td>${new Date(d.data+"T00:00:00").toLocaleDateString("pt-BR")}</td><td>${d.fornecedor}</td><td>${d.nota}</td><td>${d.produto}</td><td>${d.responsabilidade}</td><td class="money">${dinheiro(d.valorJose)}</td><td class="money">${dinheiro(d.valorWillian)}</td><td class="money">${dinheiro(d.valor)}</td></tr>`).join(""):`<tr><td colspan="10" style="text-align:center">Nenhuma despesa finalizada neste mês.</td></tr>`}</tbody></table></div>`;
+}
+function idsSelecionadosRelatorio(){
+ return [...document.querySelectorAll(".checkRelatorio:checked")].map(c=>String(c.dataset.id));
+}
+
+function selecionarTodosRelatorio(){
+ document.querySelectorAll(".checkRelatorio").forEach(c=>c.checked=true);
+}
+
+function limparSelecaoRelatorio(){
+ document.querySelectorAll(".checkRelatorio").forEach(c=>c.checked=false);
+}
+
+function pedirSenhaRelatorio(){
+ const senha=prompt("Digite a senha 8526 para alterar o histórico do relatório:");
+ if(senha===null)return false;
+ if(senha!=="8526"){
+   alert("Senha incorreta. Nenhum dado foi alterado.");
+   return false;
+ }
+ return true;
+}
+
+function excluirSelecionadasRelatorio(){
+ const ids=idsSelecionadosRelatorio();
+ if(!ids.length){
+   alert("Selecione pelo menos uma compra para excluir do relatório.");
+   return;
+ }
+ if(!pedirSenhaRelatorio())return;
+
+ const lista=historico.filter(d=>ids.includes(String(d.id)));
+ const resumo=lista.map(d=>"#"+d.numero+" - "+d.produto+" - "+dinheiro(d.valor)).join("\n");
+
+ if(!confirm(
+   "Você selecionou "+lista.length+" compra(s).\n\n"+
+   resumo+"\n\n"+
+   "Esses registros serão retirados SOMENTE do histórico do Relatório.\n"+
+   "As despesas da tela 'Despesas' e os produtos/vendas não serão apagados.\n\n"+
+   "Deseja continuar?"
+ ))return;
+
+ historico=historico.filter(d=>!ids.includes(String(d.id)));
+ salvar();
+ montarMeses();
+ renderRelatorio();
+ renderResumo();
+
+ alert(lista.length+" registro(s) foram retirados do histórico do relatório.");
+}
+
+function excluirMesRelatorio(){
+ const mes=mesRel.value;
+ const lista=historico.filter(d=>doMes(d)===mes);
+ if(!lista.length){
+   alert("Não há registros neste mês.");
+   return;
+ }
+ if(!pedirSenhaRelatorio())return;
+
+ const nome=new Date(mes+"-01T00:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+ if(!confirm(
+   "Você está escolhendo excluir TODO o histórico de "+nome+".\n\n"+
+   "Serão removidos "+lista.length+" registro(s) SOMENTE do Relatório.\n"+
+   "As despesas da tela 'Despesas' e os produtos/vendas não serão apagados.\n\n"+
+   "Deseja continuar?"
+ ))return;
+
+ historico=historico.filter(d=>doMes(d)!==mes);
+ salvar();
+ montarMeses();
+ renderRelatorio();
+ renderResumo();
+
+ alert("Histórico de "+nome+" excluído do relatório.");
+}
+
+function imprimirRelatorio(){
+ const mes=mesRel.value,lista=historico.filter(d=>doMes(d)===mes);
+ const total=lista.reduce((s,d)=>s+(Number(d.valor)||0),0),j=lista.reduce((s,d)=>s+(Number(d.valorJose)||0),0),w=lista.reduce((s,d)=>s+(Number(d.valorWillian)||0),0);
+ const nome=new Date(mes+"-01T00:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+ const win=window.open("","_blank");if(!win){alert("Permita pop-ups para imprimir.");return}
+ win.document.write(`<html><head><title>Relatório de Despesas - ${nome}</title><style>
+ body{font-family:Arial;margin:15mm;color:#111}h1{text-align:center}h2{text-align:center;font-weight:normal}table{width:100%;border-collapse:collapse}th,td{border:1px solid #777;padding:6px;font-size:11px}th{background:#eee}.totais{display:flex;justify-content:space-between;border:1px solid #888;padding:10px;margin:15px 0;font-weight:bold}.money{text-align:right}@page{size:A4 landscape;margin:10mm}</style></head><body>
+ <h1>RELATÓRIO DE DESPESAS</h1><h2>${nome}</h2>
+ <div class="totais"><span>Compras: ${lista.length}</span><span>José: ${dinheiro(j)}</span><span>Willian: ${dinheiro(w)}</span><span>Total: ${dinheiro(total)}</span></div>
+ <table><thead><tr><th>Compra</th><th>Data</th><th>Fornecedor</th><th>NF</th><th>Produto</th><th>Responsabilidade</th><th>Valor José</th><th>Valor Willian</th><th>Total</th></tr></thead><tbody>
+ ${lista.map(d=>`<tr><td>#${d.numero}</td><td>${new Date(d.data+"T00:00:00").toLocaleDateString("pt-BR")}</td><td>${d.fornecedor}</td><td>${d.nota}</td><td>${d.produto}</td><td>${d.responsabilidade}</td><td class="money">${dinheiro(d.valorJose)}</td><td class="money">${dinheiro(d.valorWillian)}</td><td class="money">${dinheiro(d.valor)}</td></tr>`).join("")}
+ </tbody></table><p style="text-align:center;margin-top:25px;font-size:11px">Histórico permanente de despesas finalizadas.</p>
+ <script>window.onload=()=>window.print()<\/script></body></html>`);win.document.close();
+}
+function limparRelatorioComSenha(){
+ if(!pedirSenhaRelatorio())return;
+ if(!historico.length){
+   alert("O histórico do relatório já está vazio.");
+   return;
+ }
+ if(!confirm(
+   "ATENÇÃO!\n\n"+
+   "Isto apagará TODOS os registros do histórico permanente do Relatório.\n"+
+   "As despesas da tela 'Despesas' NÃO serão apagadas.\n"+
+   "Produtos e vendas NÃO serão apagados.\n\n"+
+   "Use esta opção somente se realmente quiser começar um novo histórico.\n\n"+
+   "Deseja continuar?"
+ ))return;
+
+ historico=[];
+ localStorage.setItem(HISTKEY,"[]");
+ montarMeses();
+ renderRelatorio();
+ renderResumo();
+ alert("Histórico do relatório zerado. O sistema está pronto para acumular novos registros.");
+}
+
+
+function renderPainel(){
+ const t=despesas.reduce((s,d)=>s+d.valor,0),j=despesas.reduce((s,d)=>s+d.valorJose,0),w=despesas.reduce((s,d)=>s+d.valorWillian,0);
+ sQtd.textContent=despesas.length;sTotal.textContent=dinheiro(t);sJose.textContent=dinheiro(j);sWillian.textContent=dinheiro(w);
+}
+function renderResumo(){
+ const t=historico.reduce((s,d)=>s+d.valor,0),j=historico.reduce((s,d)=>s+d.valorJose,0),w=historico.reduce((s,d)=>s+d.valorWillian,0);
+ rTotal.textContent=dinheiro(t);rJose.textContent=dinheiro(j);rWillian.textContent=dinheiro(w);rDiv.textContent=historico.filter(d=>d.responsabilidade==="DIVIDIDO").length;
+ let out="<h3>Resumo mensal</h3><div class='tabela'><table><thead><tr><th>Mês</th><th>Compras</th><th>Total</th><th>José</th><th>Willian</th></tr></thead><tbody>";
+ for(let m=1;m<=12;m++){const a=new Date().getFullYear(),ch=`${a}-${String(m).padStart(2,"0")}`,l=historico.filter(d=>doMes(d)===ch);out+=`<tr><td>${new Date(ch+"-01T00:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</td><td>${l.length}</td><td>${dinheiro(l.reduce((s,d)=>s+d.valor,0))}</td><td>${dinheiro(l.reduce((s,d)=>s+d.valorJose,0))}</td><td>${dinheiro(l.reduce((s,d)=>s+d.valorWillian,0))}</td></tr>`}
+ resumoMeses.innerHTML=out+"</tbody></table></div>";
+}
+function backup(){
+ const dados={despesas,historico,geradoEm:new Date().toISOString(),versao:"1.0"};
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(dados,null,2)],{type:"application/json"}));a.download="backup_despesas_"+hoje()+".json";a.click();
+}
+carregarProdutosVendas();limparFormulario();renderPainel();
+
+/* ===== V5 — LANÇAMENTO EM ETAPAS ===== */
+const LANCAMENTOS_KEY="sistema_despesas_lancamentos_v1";
+const PIX_KEY="sistema_despesas_pix_v1";
+
+function lerLancamentos(){
+ try{
+   const x=JSON.parse(localStorage.getItem(LANCAMENTOS_KEY)||"[]");
+   return Array.isArray(x)?x:[];
+ }catch(e){return []}
+}
+
+function salvarLancamentos(lista){
+ localStorage.setItem(LANCAMENTOS_KEY,JSON.stringify(lista));
+ renderLancamento();
+}
+
+function dinheiroSeguro(v){
+ return Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+}
+
+function removerLancamento(i){
+ const lista=lerLancamentos();
+ lista.splice(i,1);
+ salvarLancamentos(lista);
+}
+
+function limparLancamento(){
+ if(!lerLancamentos().length)return;
+ if(confirm("Deseja limpar todas as despesas que ainda não foram finalizadas?")){
+   salvarLancamentos([]);
+ }
+}
+
+function renderLancamento(){
+ const body=document.getElementById("pendentesBody");
+ const resumo=document.getElementById("pendentesResumo");
+ const pix=document.getElementById("pixLancamento");
+ if(!body)return;
+
+ const lista=lerLancamentos();
+ body.innerHTML="";
+
+ let total=0,jose=0,willian=0;
+
+ lista.forEach((d,i)=>{
+   total+=Number(d.valor)||0;
+   jose+=Number(d.valorJose)||0;
+   willian+=Number(d.valorWillian)||0;
+
+   const tr=document.createElement("tr");
+   tr.innerHTML=
+     "<td>"+(d.data||"")+"</td>"+
+     "<td>"+(d.fornecedor||"")+"</td>"+
+     "<td>"+(d.produto||"")+"</td>"+
+     "<td>"+dinheiroSeguro(d.valor)+"</td>"+
+     "<td>"+(d.responsabilidade||"")+"</td>"+
+     "<td>"+dinheiroSeguro(d.valorJose)+"</td>"+
+     "<td>"+dinheiroSeguro(d.valorWillian)+"</td>"+
+     '<td><button onclick="removerLancamento('+i+')" class="sec">Excluir</button></td>';
+
+   body.appendChild(tr);
+ });
+
+ if(!lista.length){
+   resumo.innerHTML="<b>Nenhuma despesa aguardando lançamento.</b>";
+   pix.innerHTML="<b>Acerto via PIX:</b> José deve devolver para Willian: <b>R$ 0,00</b>";
+   return;
+ }
+
+ resumo.innerHTML=
+   "<b>"+lista.length+"</b> despesa(s) aguardando finalização."+
+   " &nbsp; Total: <b>"+dinheiroSeguro(total)+"</b>"+
+   " &nbsp; José: <b>"+dinheiroSeguro(jose)+"</b>"+
+   " &nbsp; Willian: <b>"+dinheiroSeguro(willian)+"</b>";
+
+ pix.innerHTML=
+   "<b>Acerto via PIX:</b> José deve devolver para Willian: "+
+   "<b>"+dinheiroSeguro(jose)+"</b>";
+}
+
+function finalizarLancamento(){
+ const lista=lerLancamentos();
+
+ if(!lista.length){
+   alert("Não há despesas aguardando finalização.");
+   return;
+ }
+
+ if(!confirm("Finalizar e registrar "+lista.length+" despesa(s)?")){
+   return;
+ }
+
+ let somaJose=0;
+
+ lista.forEach(item=>{
+   const registro={
+     id:Date.now()+Math.random(),
+     data:item.data,
+     fornecedor:item.fornecedor,
+     nota:item.nota,
+     categoria:item.categoria,
+     produto:item.produto,
+     produtoId:item.produtoId,
+     valor:Number(item.valor)||0,
+     responsabilidade:item.responsabilidade,
+     valorJose:Number(item.valorJose)||0,
+     valorWillian:Number(item.valorWillian)||0,
+     obs:item.obs||"",
+     criadoEm:item.criadoEm
+   };
+
+   somaJose+=registro.valorJose;
+
+   despesas.push(registro);
+   historico.push({
+     ...registro,
+     numero:(historico.reduce((m,x)=>Math.max(m,Number(x.numero)||0),0)+1),
+     finalizadaEm:new Date().toISOString()
+   });
+ });
+
+ localStorage.setItem(PIX_KEY,String(somaJose));
+
+ salvar();
+ salvarLancamentos([]);
+
+ alert(
+   "Lançamento finalizado com sucesso.\n\n"+
+   "Despesas registradas: "+lista.length+
+   "\nParte de José: "+dinheiroSeguro(somaJose)+
+   "\n\nJosé deve devolver para Willian via PIX: "+
+   dinheiroSeguro(somaJose)
+ );
+
+ mostrar("despesas");
+}
+
+renderLancamento();
+
+</script>
+</body>
+</html>
