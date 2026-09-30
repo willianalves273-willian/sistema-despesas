@@ -31,8 +31,8 @@ table{width:100%;border-collapse:collapse;margin-top:15px;min-width:850px}
 th,td{border:1px solid #ccc;padding:9px;text-align:left;vertical-align:top}
 th{background:#e5e7eb}
 .money{text-align:right;white-space:nowrap}
-.nota{border:1px dashed #999;padding:14px;margin:12px 0;background:#fffdf7;border-radius:6px}
-.fornecedor-row{display:flex;gap:8px;align-items:flex-end}.fornecedor-row select{flex:1}.btn-fornecedor{white-space:nowrap;background:#f0ad00!important;color:#222!important;font-weight:bold}.quantidade-box{display:flex;gap:6px;align-items:center}.quantidade-box button{width:42px;height:42px;padding:0;background:#f0ad00;color:#222;font-size:22px;font-weight:bold}.quantidade-box input{width:90px;text-align:center;font-size:18px}.quantidade-ajuda{font-size:12px;color:#666;margin-top:4px}.nota-head{display:flex;justify-content:space-between;gap:15px;border-bottom:1px dashed #aaa;padding-bottom:8px;margin-bottom:8px}
+.nota{border:1px dashed #999;padding:14px;margin:12px 0;background:#fffdf7;border-radius:6px}.fornecedor-row{display:flex;gap:8px;align-items:flex-end}.fornecedor-row select{flex:1}.quantidade-box{display:flex;gap:6px;align-items:center}.quantidade-box button{width:42px;height:42px;padding:0;background:#f0ad00;color:#222;font-size:22px;font-weight:bold}.quantidade-box input{width:90px;text-align:center;font-size:18px}.quantidade-ajuda{font-size:12px;color:#666;margin-top:4px}
+.nota-head{display:flex;justify-content:space-between;gap:15px;border-bottom:1px dashed #aaa;padding-bottom:8px;margin-bottom:8px}
 .nota-total{font-size:18px;font-weight:bold;text-align:right;margin-top:10px}
 .aviso{padding:12px;border:1px solid #f0c36d;background:#fff7e6;border-radius:7px;margin:10px 0}
 .status{font-size:14px;margin-top:8px}
@@ -91,7 +91,7 @@ Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO<
 <table>
 <thead>
 <tr>
-<th>Data</th><th>Fornecedor</th><th>Produto</th><th>Quantidade</th><th>Total</th>
+<th>Data</th><th>Fornecedor</th><th>Produto</th><th>Total</th>
 <th>Responsabilidade</th><th>José</th><th>Willian</th><th>Ação</th>
 </tr>
 </thead>
@@ -114,30 +114,35 @@ Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO<
 <h2 id="tituloNova">Nova Despesa</h2>
 <div class="formgrid">
 <div><label>Data da despesa<input id="data" type="date"></label></div>
-<div><label>Fornecedor</label>
-<div class="fornecedor-row">
-<select id="fornecedor"></select>
-<button type="button" class="btn-fornecedor" onclick="cadastrarFornecedor()">＋ Novo</button>
-</div>
-<div class="quantidade-ajuda">Você pode cadastrar novos fornecedores e eles ficarão disponíveis nas próximas despesas.</div>
-</div>
+<div><label>Fornecedor</label><div class="fornecedor-row"><select id="fornecedor"></select><button type="button" onclick="cadastrarFornecedor()" style="white-space:nowrap;background:#f0ad00;color:#222">＋ Novo</button></div><div class="quantidade-ajuda">Você pode cadastrar novos fornecedores.</div>
+<!-- fornecedor dinâmico -->
+<select id="fornecedor_antigo_inativo" style="display:none"></select>
+<!-- fornecedores carregados pelo sistema -->
+<option>SUPERMERCADO BOA OPÇÃO</option>
+<option>UNIEPAZ</option>
+<option>FIBROM</option>
+<option>SAAE</option>
+<option>CEMIG</option>
+<option>ADILSON</option>
+<option>OUTROS MERCADOS</option>
+</select>
+</label></div>
 <div><label>Nota fiscal<input id="nota" value="012345" placeholder="Número da nota"></label></div>
 <div><label>Categoria<select id="categoria"><option>SUPERMERCADO</option><option>ALIMENTAÇÃO</option><option>CASA</option><option>TRANSPORTE</option><option>SAÚDE</option><option>OUTROS</option></select></label></div>
-<div><label>Descrição / produto
+<div><label>Descrição / produto</label>
+<div style="display:flex;gap:8px;align-items:flex-end">
+<div style="flex:1">
+<input id="buscaProduto" type="search" placeholder="🔎 Digite o nome do produto..." oninput="filtrarProdutosVendas()" autocomplete="off">
 <select id="produto" onchange="preencherProdutoSelecionado()">
-<option value="">Selecione um produto do Estoque do Sistema de Vendas</option>
+<option value="">Selecione um produto do Sistema de Vendas</option>
 </select>
-</label>
+</div>
+<button type="button" class="sec" onclick="atualizarProdutosVendas()" style="white-space:nowrap">🔄 Atualizar</button>
+</div>
 <div id="produtoInfo" style="font-size:12px;color:#666;margin-top:5px"></div>
+<div id="produtoStatus" class="quantidade-ajuda"></div>
 </div>
-<div><label>Quantidade</label>
-<div class="quantidade-box">
-<button type="button" onclick="alterarQuantidade(-1)" title="Diminuir quantidade">−</button>
-<input id="quantidade" type="number" min="1" step="1" value="1">
-<button type="button" onclick="alterarQuantidade(1)" title="Aumentar quantidade">＋</button>
-</div>
-<div class="quantidade-ajuda">Use − e ＋ para ajustar a quantidade.</div>
-</div>
+<div><label>Quantidade</label><div class="quantidade-box"><button type="button" onclick="alterarQuantidade(-1)">−</button><input id="quantidade" type="number" min="1" step="1" value="1"><button type="button" onclick="alterarQuantidade(1)">＋</button></div><div class="quantidade-ajuda">Use − e ＋ para ajustar a quantidade.</div></div>
 <div><label>Valor total<input id="valor" type="number" min="0" step="0.01" placeholder="0,00"></label></div>
 <div><label>Responsabilidade<select id="responsabilidade" onchange="ajustarResponsabilidade()"><option>JOSÉ</option><option>WILLIAN</option><option>DIVIDIDO</option></select></label></div>
 <div><label>Valor José<input id="valorJose" type="number" min="0" step="0.01" placeholder="0,00"></label></div>
@@ -214,6 +219,8 @@ function mostrar(id){
  if(id==="despesas")renderDespesas();
  if(id==="relatorios"){montarMeses();renderRelatorio();}
  if(id==="resumo")renderResumo();
+ if(id==="nova"){carregarFornecedores();carregarProdutosVendas();}
+ if(id==="lancamento")renderLancamento();
 }
 function ajustarResponsabilidade(){
  const r=document.getElementById("responsabilidade").value;
@@ -225,31 +232,57 @@ function ajustarResponsabilidade(){
 valor.addEventListener("input",ajustarResponsabilidade);
 
 
+const CHAVE_VENDAS_ATUAL="sistema_vendas_local_v1";
+const CHAVE_VENDAS_ANTIGA="produtos_vendas";
+
 function produtosDoSistemaVendas(){
+  const listas=[];
   try{
-    const dados=JSON.parse(localStorage.getItem("produtos_vendas")||"[]");
-    return Array.isArray(dados)?dados:[];
-  }catch(e){return []}
+    const dadosAtual=JSON.parse(localStorage.getItem(CHAVE_VENDAS_ATUAL)||"null");
+    if(dadosAtual && Array.isArray(dadosAtual.produtos)) listas.push(dadosAtual.produtos);
+  }catch(e){}
+  try{
+    const dadosAntigos=JSON.parse(localStorage.getItem(CHAVE_VENDAS_ANTIGA)||"null");
+    if(Array.isArray(dadosAntigos)) listas.push(dadosAntigos);
+    else if(dadosAntigos && Array.isArray(dadosAntigos.produtos)) listas.push(dadosAntigos.produtos);
+  }catch(e){}
+  const mapa=new Map();
+  listas.flat().forEach((p,i)=>{
+    if(!p)return;
+    const id=p.id??("sem-id-"+i);
+    const nome=String(p.nome??p.produto??p.descricao??"").trim();
+    if(!nome)return;
+    const chave=String(id);
+    if(!mapa.has(chave))mapa.set(chave,p);
+  });
+  return [...mapa.values()];
 }
+function nomeProdutoNormalizado(p){return String(p?.nome??p?.produto??p?.descricao??"Produto").trim();}
 function carregarProdutosVendas(){
   const select=document.getElementById("produto");
   if(!select)return;
   const atual=select.value;
+  const busca=(document.getElementById("buscaProduto")?.value||"").trim().toLocaleLowerCase("pt-BR");
   const lista=produtosDoSistemaVendas();
-  select.innerHTML='<option value="">Selecione um produto do Estoque do Sistema de Vendas</option>';
-  lista.forEach((p,i)=>{
-    const id=p.id??i;
-    const nome=p.nome??p.produto??p.descricao??"Produto";
+  select.innerHTML='<option value="">Selecione um produto do Sistema de Vendas</option>';
+  const filtrados=lista.filter(p=>!busca || nomeProdutoNormalizado(p).toLocaleLowerCase("pt-BR").includes(busca)).sort((a,b)=>nomeProdutoNormalizado(a).localeCompare(nomeProdutoNormalizado(b),"pt-BR"));
+  filtrados.forEach((p,i)=>{
+    const id=p.id??i,nome=nomeProdutoNormalizado(p);
     const opt=document.createElement("option");
-    opt.value=String(id);
-    opt.textContent=nome;
-    opt.dataset.nome=nome;
-    opt.dataset.preco=p.preco??"";
-    opt.dataset.estoque=p.estoque_inteiro??p.estoque??"";
+    opt.value=String(id);opt.textContent=nome;opt.dataset.nome=nome;
+    opt.dataset.preco=p.preco??"";opt.dataset.estoque=p.estoque_inteiro??p.estoque??"";
     select.appendChild(opt);
   });
   if([...select.options].some(o=>o.value===atual))select.value=atual;
   preencherProdutoSelecionado();
+  const status=document.getElementById("produtoStatus");
+  if(status)status.textContent=!lista.length?"⚠️ Nenhum produto encontrado. Abra o Sistema de Vendas neste mesmo navegador/aparelho e verifique os produtos.":(!filtrados.length?"Nenhum produto corresponde à busca. Limpe o campo para mostrar todos.":filtrados.length+" produto(s) disponível(is) do Sistema de Vendas.");
+}
+function filtrarProdutosVendas(){carregarProdutosVendas();}
+function atualizarProdutosVendas(){
+  carregarProdutosVendas();
+  const lista=produtosDoSistemaVendas();
+  alert(lista.length?"Produtos atualizados com sucesso!\n\n"+lista.length+" produto(s) encontrados no Sistema de Vendas.":"Nenhum produto foi encontrado no Sistema de Vendas neste navegador. Abra primeiro o Sistema de Vendas e cadastre/verifique os produtos.");
 }
 function preencherProdutoSelecionado(){
   const select=document.getElementById("produto"),info=document.getElementById("produtoInfo");
@@ -265,57 +298,17 @@ function preencherProdutoSelecionado(){
 }
 
 const FORNECEDORES_KEY="sistema_despesas_fornecedores_v1";
-const FORNECEDORES_PADRAO=[
- "SUPERMERCADO TABULEIRO",
- "SUPERMERCADO BOA OPÇÃO",
- "ADRIANO FARMÁCIA",
- "TIM BARBEIRO",
- "UNIEPAZ",
- "FIBROM",
- "SAAE",
- "CEMIG",
- "ADILSON",
- "OUTROS MERCADOS"
-];
-function lerFornecedores(){
- try{
-  const salvos=JSON.parse(localStorage.getItem(FORNECEDORES_KEY)||"[]");
-  const lista=Array.isArray(salvos)?salvos:[];
-  return [...new Set([...FORNECEDORES_PADRAO,...lista].map(x=>String(x).trim()).filter(Boolean))];
- }catch(e){return [...FORNECEDORES_PADRAO]}
-}
-function salvarFornecedores(lista){localStorage.setItem(FORNECEDORES_KEY,JSON.stringify([...new Set(lista.map(x=>String(x).trim()).filter(Boolean))]));}
-function carregarFornecedores(){
- const select=document.getElementById("fornecedor"); if(!select)return;
- const atual=select.value||"SUPERMERCADO TABULEIRO";
- select.innerHTML="";
- lerFornecedores().sort((a,b)=>a.localeCompare(b,"pt-BR")).forEach(nome=>{
-  const o=document.createElement("option");o.value=nome;o.textContent=nome;select.appendChild(o);
- });
- if([...select.options].some(o=>o.value===atual))select.value=atual;
- else select.value="SUPERMERCADO TABULEIRO";
-}
-function cadastrarFornecedor(){
- const nome=prompt("Digite o nome do novo fornecedor:");
- if(nome===null)return;
- const limpo=nome.trim();
- if(!limpo){alert("Digite um nome válido.");return}
- const lista=lerFornecedores();
- const existente=lista.find(x=>x.toLocaleLowerCase()===limpo.toLocaleLowerCase());
- if(existente){carregarFornecedores();fornecedor.value=existente;alert("Esse fornecedor já está cadastrado.");return}
- lista.push(limpo);salvarFornecedores(lista);carregarFornecedores();fornecedor.value=limpo;
- alert("Fornecedor cadastrado com sucesso!\n\n"+limpo);
-}
-function alterarQuantidade(delta){
- const campo=document.getElementById("quantidade"); if(!campo)return;
- let q=Math.floor(Number(campo.value)||1); q=Math.max(1,q+delta); campo.value=q;
-}
+const FORNECEDORES_PADRAO=["SUPERMERCADO TABULEIRO","SUPERMERCADO BOA OPÇÃO","ADRIANO FARMÁCIA","TIM BARBEIRO","UNIEPAZ","FIBROM","SAAE","CEMIG","ADILSON","OUTROS MERCADOS"];
+function lerFornecedores(){try{const x=JSON.parse(localStorage.getItem(FORNECEDORES_KEY)||"[]");const l=Array.isArray(x)?x:[];return [...new Set([...FORNECEDORES_PADRAO,...l].map(v=>String(v).trim()).filter(Boolean))]}catch(e){return [...FORNECEDORES_PADRAO]}}
+function salvarFornecedores(l){localStorage.setItem(FORNECEDORES_KEY,JSON.stringify([...new Set(l.map(v=>String(v).trim()).filter(Boolean))]))}
+function carregarFornecedores(){const s=document.getElementById("fornecedor");if(!s)return;const atual=s.value||FORNECEDORES_PADRAO[0];s.innerHTML="";lerFornecedores().sort((a,b)=>a.localeCompare(b,"pt-BR")).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;s.appendChild(o)});s.value=[...s.options].some(o=>o.value===atual)?atual:FORNECEDORES_PADRAO[0]}
+function cadastrarFornecedor(){const n=prompt("Digite o nome do novo fornecedor:");if(n===null)return;const t=n.trim();if(!t){alert("Digite um nome válido.");return}const l=lerFornecedores();const e=l.find(x=>x.toLocaleLowerCase()===t.toLocaleLowerCase());if(e){carregarFornecedores();fornecedor.value=e;alert("Esse fornecedor já está cadastrado.");return}l.push(t);salvarFornecedores(l);carregarFornecedores();fornecedor.value=t;alert("Fornecedor cadastrado com sucesso!\n\n"+t)}
+function alterarQuantidade(d){const c=document.getElementById("quantidade");if(!c)return;c.value=Math.max(1,Math.floor(Number(c.value)||1)+d)}
 
 function limparFormulario(){
  editandoId=null;
  tituloNova.textContent="Nova Despesa";btnCancelar.classList.add("oculto");
- data.value=hoje();for(const id of ["obs"])document.getElementById(id).value="";carregarFornecedores();fornecedor.value="SUPERMERCADO TABULEIRO";nota.value="012345";carregarProdutosVendas();
- quantidade.value="1";
+ data.value=hoje();for(const id of ["obs"])document.getElementById(id).value="";carregarFornecedores();fornecedor.value="SUPERMERCADO TABULEIRO";nota.value="012345";carregarProdutosVendas();quantidade.value="1";
  valor.value="";responsabilidade.value="JOSÉ";valorJose.value="";valorWillian.value="";
  categoria.value="SUPERMERCADO";
 }
@@ -367,7 +360,7 @@ salvarLancamentos(lista);
 function editar(id){
  const d=despesas.find(x=>x.id===id);if(!d)return;
  editandoId=id;tituloNova.textContent="Editar Despesa";btnCancelar.classList.remove("oculto");
- for(const k of ["data","categoria","valor","responsabilidade","valorJose","valorWillian","obs"])document.getElementById(k).value=d[k]??"";quantidade.value=d.quantidade??1;carregarFornecedores();fornecedor.value=d.fornecedor||"SUPERMERCADO TABULEIRO";nota.value=d.nota||"012345";carregarProdutosVendas();const ps=produtosDoSistemaVendas().find(p=>String(p.id??"")===String(d.produtoId??"") || String(p.nome??p.produto??p.descricao??"")===String(d.produto??""));if(ps)produto.value=String(ps.id??"");preencherProdutoSelecionado();
+ for(const k of ["data","categoria","valor","responsabilidade","valorJose","valorWillian","obs"])document.getElementById(k).value=d[k]??"";fornecedor.value=d.fornecedor||"SUPERMERCADO TABULEIRO";nota.value=d.nota||"012345";carregarProdutosVendas();const ps=produtosDoSistemaVendas().find(p=>String(p.id??"")===String(d.produtoId??"") || String(p.nome??p.produto??p.descricao??"")===String(d.produto??""));if(ps)produto.value=String(ps.id??"");preencherProdutoSelecionado();
  mostrar("nova");
 }
 function excluir(id){
@@ -556,6 +549,8 @@ function backup(){
  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(dados,null,2)],{type:"application/json"}));a.download="backup_despesas_"+hoje()+".json";a.click();
 }
 carregarFornecedores();carregarProdutosVendas();limparFormulario();renderPainel();
+window.addEventListener("storage",function(e){if(e.key===CHAVE_VENDAS_ATUAL||e.key===CHAVE_VENDAS_ANTIGA)carregarProdutosVendas()});
+window.addEventListener("focus",carregarProdutosVendas);
 
 /* ===== V5 — LANÇAMENTO EM ETAPAS ===== */
 const LANCAMENTOS_KEY="sistema_despesas_lancamentos_v1";
@@ -611,7 +606,6 @@ function renderLancamento(){
      "<td>"+(d.data||"")+"</td>"+
      "<td>"+(d.fornecedor||"")+"</td>"+
      "<td>"+(d.produto||"")+"</td>"+
-     "<td style=\"text-align:center;font-weight:bold\">"+(Number(d.quantidade)||1)+"</td>"+
      "<td>"+dinheiroSeguro(d.valor)+"</td>"+
      "<td>"+(d.responsabilidade||"")+"</td>"+
      "<td>"+dinheiroSeguro(d.valorJose)+"</td>"+
