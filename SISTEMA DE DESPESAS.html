@@ -91,7 +91,7 @@ Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO<
 <table>
 <thead>
 <tr>
-<th>Data</th><th>Fornecedor</th><th>Produto</th><th>Total</th>
+<th>Data</th><th>Fornecedor</th><th>Produto</th><th>Quantidade</th><th>Total</th>
 <th>Responsabilidade</th><th>José</th><th>Willian</th><th>Ação</th>
 </tr>
 </thead>
@@ -606,6 +606,7 @@ function renderLancamento(){
      "<td>"+(d.data||"")+"</td>"+
      "<td>"+(d.fornecedor||"")+"</td>"+
      "<td>"+(d.produto||"")+"</td>"+
+     "<td style=\"text-align:center;font-weight:bold\">"+(Number(d.quantidade)||1)+"</td>"+
      "<td>"+dinheiroSeguro(d.valor)+"</td>"+
      "<td>"+(d.responsabilidade||"")+"</td>"+
      "<td>"+dinheiroSeguro(d.valorJose)+"</td>"+
