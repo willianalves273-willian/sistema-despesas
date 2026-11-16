@@ -57,7 +57,7 @@ body{background:#fff}.container{max-width:none;margin:0;padding:0}.card{box-shad
 <p>Entre com o e-mail e a senha cadastrados no Firebase Authentication.</p>
 <label>E-mail<input id="loginEmail" type="email" autocomplete="username" placeholder="Seu e-mail"></label>
 <label style="margin-top:12px">Senha<input id="loginSenha" type="password" autocomplete="current-password" placeholder="Sua senha"></label>
-<div class="actions"><button type="button" onclick="entrarFirebase()">Entrar</button></div>
+<div class="actions"><button type="button" onclick="entrarFirebase()">Entrar</button><button type="button" class="sec" onclick="recuperarSenhaFirebase()">Esqueci minha senha</button></div>
 <div id="loginMsg" class="status" role="status"></div>
 </section>
 
@@ -215,7 +215,7 @@ Você pode selecionar compras individuais, excluir um mês inteiro ou, em últim
 /* ===== FIREBASE: AUTENTICACAO E BANCO DE DADOS ===== */
 window.firebaseDespesasReady = (async()=>{
   try{
-    const [{initializeApp,getApps},{getDatabase,ref,get,set},{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}] = await Promise.all([
+    const [{initializeApp,getApps},{getDatabase,ref,get,set},{getAuth,signInWithEmailAndPassword,sendPasswordResetEmail,signOut,onAuthStateChanged}] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js"),
       import("https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js"),
       import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js")
@@ -231,7 +231,7 @@ window.firebaseDespesasReady = (async()=>{
     };
     const app=getApps().find(a=>a.name==="despesasApp")||initializeApp(firebaseConfig,"despesasApp");
     const db=getDatabase(app), auth=getAuth(app);
-    return {db,auth,ref,get,set,signInWithEmailAndPassword,signOut,onAuthStateChanged};
+    return {db,auth,ref,get,set,signInWithEmailAndPassword,sendPasswordResetEmail,signOut,onAuthStateChanged};
   }catch(e){
     console.error("Falha ao iniciar Firebase:",e);
     return null;
@@ -790,14 +790,37 @@ async function entrarFirebase(){
  msg.textContent="Verificando acesso...";
  try{
   const fb=await window.firebaseDespesasReady;
-  if(!fb)throw new Error("Não foi possível iniciar a conexão com o Firebase.");
+  if(!fb)throw new Error("Não foi possível iniciar o Firebase. Verifique a configuração do projeto.");
   await fb.signInWithEmailAndPassword(fb.auth,email,senha);
   msg.textContent="Acesso confirmado. Carregando dados...";
  }catch(e){
-  console.error(e);
-  msg.textContent=(e.code==="auth/invalid-credential"||e.code==="auth/wrong-password"||e.code==="auth/user-not-found")
-   ?"E-mail ou senha incorretos."
-   :"Não foi possível entrar. Verifique a conexão e a configuração do Firebase.";
+  console.error("Falha no login Firebase:",e);
+  const cod=e?.code||"";
+  if(cod==="auth/too-many-requests") msg.textContent="Muitas tentativas. Aguarde antes de tentar novamente ou use 'Esqueci minha senha'.";
+  else if(cod==="auth/invalid-credential"||cod==="auth/wrong-password"||cod==="auth/user-not-found") msg.textContent="O Firebase não aceitou este e-mail e senha. Confira o e-mail ou use 'Esqueci minha senha' para criar uma nova senha.";
+  else if(cod==="auth/invalid-email") msg.textContent="O formato do e-mail não é válido.";
+  else if(cod==="auth/network-request-failed") msg.textContent="Falha de conexão. Verifique a internet e tente novamente.";
+  else if(cod==="auth/operation-not-allowed") msg.textContent="O acesso por e-mail e senha não está habilitado no Firebase Authentication.";
+  else if(cod==="auth/unauthorized-domain") msg.textContent="O domínio do GitHub Pages não está autorizado no Firebase Authentication.";
+  else msg.textContent="Não foi possível entrar ("+(cod||"erro não identificado")+"). Consulte o Console para detalhes.";
+ }
+}
+
+async function recuperarSenhaFirebase(){
+ const msg=document.getElementById("loginMsg");
+ const email=document.getElementById("loginEmail").value.trim();
+ if(!email){msg.textContent="Digite primeiro seu e-mail no campo acima e depois clique em 'Esqueci minha senha'.";return;}
+ msg.textContent="Solicitando recuperação de senha...";
+ try{
+  const fb=await window.firebaseDespesasReady;
+  if(!fb)throw new Error("Firebase não inicializado.");
+  await fb.sendPasswordResetEmail(fb.auth,email);
+  msg.textContent="Se o e-mail estiver cadastrado, o Firebase enviará uma mensagem com o link para redefinir a senha. Confira também Spam e Lixo eletrônico.";
+ }catch(e){
+  console.error("Falha ao solicitar recuperação:",e);
+  if(e?.code==="auth/too-many-requests") msg.textContent="O Firebase limitou temporariamente as tentativas. Aguarde antes de solicitar novamente.";
+  else if(e?.code==="auth/invalid-email") msg.textContent="O formato do e-mail não é válido.";
+  else msg.textContent="Não foi possível solicitar a recuperação ("+(e?.code||"erro não identificado")+").";
  }
 }
 
