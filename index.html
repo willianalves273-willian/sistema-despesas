@@ -104,6 +104,7 @@ Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO<
 </div>
 
 <div class="actions">
+<button onclick="imprimirLancamento()" class="sec">🖨️ Imprimir documento</button>
 <button onclick="finalizarLancamento()" class="green">✓ FINALIZAR LANÇAMENTO</button>
 <button onclick="limparLancamento()" class="sec">Limpar lançamento</button>
 <button onclick="mostrar('nova')" class="sec">+ Lançar outra despesa</button>
@@ -409,14 +410,36 @@ function adicionarAoLancamento(){
    criadoEm:new Date().toISOString()
  };
 
+ const resumo="Confirmar inclusão desta despesa no lançamento?\n\n"+
+   "Data: "+new Date(item.data+"T00:00:00").toLocaleDateString("pt-BR")+
+   "\nFornecedor: "+item.fornecedor+
+   "\nCategoria: "+item.categoria+
+   "\nProduto: "+item.produto+
+   "\nQuantidade: "+item.quantidade+
+   "\nValor total: "+dinheiroSeguro(item.valor)+
+   "\nParte de José: "+dinheiroSeguro(item.valorJose)+
+   "\nParte de Willian: "+dinheiroSeguro(item.valorWillian);
+ if(!confirm(resumo)) return;
+
  const lista=lerLancamentos();
  lista.push(item);
-salvarLancamentos(lista);
+ salvarLancamentos(lista);
 
- alert("Despesa adicionada ao lançamento.\n\nVocê pode lançar outra despesa.");
- limparFormulario();
+ alert("Despesa confirmada e adicionada ao lançamento.\n\nData, fornecedor e categoria foram mantidos para o próximo lançamento. Eles poderão ser alterados antes de finalizar.");
+ // Mantém os três campos solicitados e limpa somente os dados específicos da compra.
+ nota.value="012345";
+ buscaProduto.value="";
+ carregarProdutosVendas();
+ produto.value="";
+ quantidade.value="1";
+ valor.value="";
+ responsabilidade.value="JOSÉ";
+ valorJose.value="";
+ valorWillian.value="";
+ obs.value="";
  mostrar("nova");
 }
+
 function editar(id){
  const d=despesas.find(x=>x.id===id);if(!d)return;
  editandoId=id;tituloNova.textContent="Editar Despesa";btnCancelar.classList.remove("oculto");
@@ -636,6 +659,64 @@ function removerLancamento(i){
  const lista=lerLancamentos();
  lista.splice(i,1);
  salvarLancamentos(lista);
+}
+
+function escaparHtml(valor){
+ return String(valor??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function imprimirLancamento(){
+ const lista=lerLancamentos();
+ if(!lista.length){
+   alert("Não há despesas aguardando finalização para imprimir.");
+   return;
+ }
+ const win=window.open("","_blank");
+ if(!win){alert("Permita pop-ups para imprimir o documento.");return;}
+ const total=lista.reduce((s,d)=>s+(Number(d.valor)||0),0);
+ const jose=lista.reduce((s,d)=>s+(Number(d.valorJose)||0),0);
+ const willian=lista.reduce((s,d)=>s+(Number(d.valorWillian)||0),0);
+ const fornecedores=[...new Set(lista.map(d=>d.fornecedor).filter(Boolean))];
+ const linhas=lista.map((d,i)=>`<tr>
+   <td>${i+1}</td><td>${escaparHtml(new Date(d.data+"T00:00:00").toLocaleDateString("pt-BR"))}</td>
+   <td>${escaparHtml(d.fornecedor)}</td><td>${escaparHtml(d.nota||"—")}</td>
+   <td>${escaparHtml(d.categoria)}</td><td>${escaparHtml(d.produto)}</td>
+   <td class="num">${Number(d.quantidade)||1}</td><td class="num">${dinheiroSeguro(d.valor)}</td>
+   <td>${escaparHtml(d.responsabilidade||"")}</td>
+   <td class="num">${dinheiroSeguro(d.valorJose)}</td><td class="num">${dinheiroSeguro(d.valorWillian)}</td>
+ </tr>`).join("");
+ win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+ <title>Documento de Despesas - Controle Interno</title>
+ <style>
+ *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:12mm;font-size:11px}
+ .topo{border:2px solid #222;padding:14px;text-align:center}.topo h1{font-size:19px;margin:0 0 5px}
+ .sub{font-size:11px;letter-spacing:1px;font-weight:bold}.dados{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+ .bloco{border:1px solid #555;padding:9px;min-height:65px}.bloco b{display:block;margin-bottom:5px}
+ .aviso{font-size:10px;color:#444;margin:8px 0}
+ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #555;padding:6px;text-align:left}
+ th{background:#eaeaea;font-size:9px}td{font-size:9px}.num{text-align:right;white-space:nowrap}
+ .totais{margin-top:12px;border:1px solid #333;padding:10px;display:flex;justify-content:space-between;font-weight:bold;font-size:12px}
+ .assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:65px;text-align:center}
+ .linha{border-top:1px solid #111;padding-top:7px;min-height:28px}.rodape{text-align:center;margin-top:28px;font-size:9px;color:#444}
+ @page{size:A4 landscape;margin:10mm}
+ </style></head><body>
+ <div class="topo"><h1>DOCUMENTO DE CONTROLE DE DESPESAS</h1><div class="sub">DEMONSTRATIVO DE LANÇAMENTO — NÃO É NOTA FISCAL ELETRÔNICA</div></div>
+ <div class="dados">
+  <div class="bloco"><b>RESPONSÁVEL PELO REGISTRO / COMPRADOR</b>WILLIAN ALVES DE SIQUEIRA</div>
+  <div class="bloco"><b>FORNECEDOR(ES) INFORMADO(S) NO LANÇAMENTO</b>${fornecedores.map(escaparHtml).join("<br>")}<br><small>Dados cadastrais adicionais do fornecedor não constam no sistema.</small></div>
+  <div class="bloco"><b>DATA DO DOCUMENTO</b>${new Date().toLocaleDateString("pt-BR")}</div>
+  <div class="bloco"><b>REFERÊNCIA</b>${lista.length} despesa(s) aguardando finalização</div>
+ </div>
+ <div class="aviso">Documento interno para conferência das despesas e divisão dos valores entre os participantes. Os números de nota fiscal abaixo são os informados no cadastro de cada despesa.</div>
+ <table><thead><tr><th>Item</th><th>Data</th><th>Fornecedor</th><th>Nº NF informado</th><th>Categoria</th><th>Produto / descrição</th><th>Qtd.</th><th>Valor</th><th>Responsabilidade</th><th>Parte José</th><th>Parte Willian</th></tr></thead>
+ <tbody>${linhas}</tbody></table>
+ <div class="totais"><span>TOTAL GERAL: ${dinheiroSeguro(total)}</span><span>PARTE DE JOSÉ: ${dinheiroSeguro(jose)}</span><span>PARTE DE WILLIAN: ${dinheiroSeguro(willian)}</span></div>
+ <div class="assinaturas">
+  <div class="linha">WILLIAN ALVES DE SIQUEIRA<br><small>Responsável pelo registro</small></div>
+  <div class="linha">JOSÉ GERALDO DE SIQUEIRA<br><small>Coparticipante das despesas — assinatura</small></div>
+ </div>
+ <div class="rodape">Documento de controle interno gerado pelo Sistema de Despesas. Não substitui DANFE ou NF-e emitida pelo fornecedor.</div>
+ <script>window.onload=()=>window.print();<\/script></body></html>`);
+ win.document.close();
 }
 
 function limparLancamento(){
