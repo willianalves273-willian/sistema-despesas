@@ -52,7 +52,16 @@ body{background:#fff}.container{max-width:none;margin:0;padding:0}.card{box-shad
 <div id="status" class="status">● Sistema local</div>
 </header>
 
-<nav class="no-print">
+<section id="telaLogin" class="card" style="max-width:480px;margin:30px auto">
+<h2>Acesso ao Sistema de Despesas</h2>
+<p>Entre com o e-mail e a senha cadastrados no Firebase Authentication.</p>
+<label>E-mail<input id="loginEmail" type="email" autocomplete="username" placeholder="Seu e-mail"></label>
+<label style="margin-top:12px">Senha<input id="loginSenha" type="password" autocomplete="current-password" placeholder="Sua senha"></label>
+<div class="actions"><button type="button" onclick="entrarFirebase()">Entrar</button></div>
+<div id="loginMsg" class="status" role="status"></div>
+</section>
+
+<nav class="no-print" id="menuSistema" style="display:none">
 <button onclick="mostrar('inicio')">Início</button>
 <button onclick="mostrar('nova')">Nova Despesa</button>
 <button onclick="mostrar('lancamento')">Lançamento</button>
@@ -63,7 +72,7 @@ body{background:#fff}.container{max-width:none;margin:0;padding:0}.card{box-shad
 <button onclick="window.print()">🖨️ Imprimir</button>
 </nav>
 
-<div class="container">
+<div class="container" id="conteudoSistema" style="display:none">
 
 <section id="inicio" class="card">
 <h2>Painel</h2>
@@ -104,7 +113,6 @@ Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO<
 </div>
 
 <div class="actions">
-<button onclick="imprimirLancamento()" class="sec">🖨️ Imprimir documento</button>
 <button onclick="finalizarLancamento()" class="green">✓ FINALIZAR LANÇAMENTO</button>
 <button onclick="limparLancamento()" class="sec">Limpar lançamento</button>
 <button onclick="mostrar('nova')" class="sec">+ Lançar outra despesa</button>
@@ -204,11 +212,14 @@ Você pode selecionar compras individuais, excluir um mês inteiro ou, em últim
 </div>
 
 <script type="module">
-/* ===== CONEXAO DIRETA COM O FIREBASE DO SISTEMA DE VENDAS ===== */
+/* ===== FIREBASE: AUTENTICACAO E BANCO DE DADOS ===== */
 window.firebaseDespesasReady = (async()=>{
   try{
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
-    const { getDatabase, ref, get } = await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js");
+    const [{initializeApp,getApps},{getDatabase,ref,get,set},{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js"),
+      import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js")
+    ]);
     const firebaseConfig = {
       apiKey: "AIzaSyC6zgVT1M2MGd5xtHWS6WxH-iuhgPn292s",
       authDomain: "sistema-vendas-78698.firebaseapp.com",
@@ -218,11 +229,11 @@ window.firebaseDespesasReady = (async()=>{
       messagingSenderId: "438799530084",
       appId: "1:438799530084:web:8e14cffb4e29d293584771"
     };
-    const app=initializeApp(firebaseConfig);
-    const db=getDatabase(app);
-    return {db,ref,get};
+    const app=getApps().find(a=>a.name==="despesasApp")||initializeApp(firebaseConfig,"despesasApp");
+    const db=getDatabase(app), auth=getAuth(app);
+    return {db,auth,ref,get,set,signInWithEmailAndPassword,signOut,onAuthStateChanged};
   }catch(e){
-    console.warn("Firebase do Sistema de Vendas indisponivel:",e);
+    console.error("Falha ao iniciar Firebase:",e);
     return null;
   }
 })();
@@ -237,7 +248,7 @@ let editandoId=null;
 
 function dinheiro(v){return Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
 function hoje(){return new Date().toISOString().slice(0,10)}
-function salvar(){localStorage.setItem(KEY,JSON.stringify(despesas));localStorage.setItem(HISTKEY,JSON.stringify(historico));}
+function salvar(){localStorage.setItem(KEY,JSON.stringify(despesas));localStorage.setItem(HISTKEY,JSON.stringify(historico));sincronizarNuvem();}
 function mostrar(id){
  document.querySelectorAll("section").forEach(s=>s.classList.add("oculto"));
  document.getElementById(id).classList.remove("oculto");
@@ -361,7 +372,7 @@ function preencherProdutoSelecionado(){
 const FORNECEDORES_KEY="sistema_despesas_fornecedores_v1";
 const FORNECEDORES_PADRAO=["SUPERMERCADO TABULEIRO","SUPERMERCADO BOA OPÇÃO","ADRIANO FARMÁCIA","TIM BARBEIRO","UNIEPAZ","FIBROM","SAAE","CEMIG","ADILSON","OUTROS MERCADOS"];
 function lerFornecedores(){try{const x=JSON.parse(localStorage.getItem(FORNECEDORES_KEY)||"[]");const l=Array.isArray(x)?x:[];return [...new Set([...FORNECEDORES_PADRAO,...l].map(v=>String(v).trim()).filter(Boolean))]}catch(e){return [...FORNECEDORES_PADRAO]}}
-function salvarFornecedores(l){localStorage.setItem(FORNECEDORES_KEY,JSON.stringify([...new Set(l.map(v=>String(v).trim()).filter(Boolean))]))}
+function salvarFornecedores(l){const dados=[...new Set(l.map(v=>String(v).trim()).filter(Boolean))];localStorage.setItem(FORNECEDORES_KEY,JSON.stringify(dados));sincronizarNuvem();}
 function carregarFornecedores(){const s=document.getElementById("fornecedor");if(!s)return;const atual=s.value||FORNECEDORES_PADRAO[0];s.innerHTML="";lerFornecedores().sort((a,b)=>a.localeCompare(b,"pt-BR")).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;s.appendChild(o)});s.value=[...s.options].some(o=>o.value===atual)?atual:FORNECEDORES_PADRAO[0]}
 function cadastrarFornecedor(){const n=prompt("Digite o nome do novo fornecedor:");if(n===null)return;const t=n.trim();if(!t){alert("Digite um nome válido.");return}const l=lerFornecedores();const e=l.find(x=>x.toLocaleLowerCase()===t.toLocaleLowerCase());if(e){carregarFornecedores();fornecedor.value=e;alert("Esse fornecedor já está cadastrado.");return}l.push(t);salvarFornecedores(l);carregarFornecedores();fornecedor.value=t;alert("Fornecedor cadastrado com sucesso!\n\n"+t)}
 function alterarQuantidade(d){const c=document.getElementById("quantidade");if(!c)return;c.value=Math.max(1,Math.floor(Number(c.value)||1)+d)}
@@ -410,36 +421,14 @@ function adicionarAoLancamento(){
    criadoEm:new Date().toISOString()
  };
 
- const resumo="Confirmar inclusão desta despesa no lançamento?\n\n"+
-   "Data: "+new Date(item.data+"T00:00:00").toLocaleDateString("pt-BR")+
-   "\nFornecedor: "+item.fornecedor+
-   "\nCategoria: "+item.categoria+
-   "\nProduto: "+item.produto+
-   "\nQuantidade: "+item.quantidade+
-   "\nValor total: "+dinheiroSeguro(item.valor)+
-   "\nParte de José: "+dinheiroSeguro(item.valorJose)+
-   "\nParte de Willian: "+dinheiroSeguro(item.valorWillian);
- if(!confirm(resumo)) return;
-
  const lista=lerLancamentos();
  lista.push(item);
- salvarLancamentos(lista);
+salvarLancamentos(lista);
 
- alert("Despesa confirmada e adicionada ao lançamento.\n\nData, fornecedor e categoria foram mantidos para o próximo lançamento. Eles poderão ser alterados antes de finalizar.");
- // Mantém os três campos solicitados e limpa somente os dados específicos da compra.
- nota.value="012345";
- buscaProduto.value="";
- carregarProdutosVendas();
- produto.value="";
- quantidade.value="1";
- valor.value="";
- responsabilidade.value="JOSÉ";
- valorJose.value="";
- valorWillian.value="";
- obs.value="";
+ alert("Despesa adicionada ao lançamento.\n\nVocê pode lançar outra despesa.");
+ limparFormulario();
  mostrar("nova");
 }
-
 function editar(id){
  const d=despesas.find(x=>x.id===id);if(!d)return;
  editandoId=id;tituloNova.textContent="Editar Despesa";btnCancelar.classList.remove("oculto");
@@ -628,7 +617,7 @@ function renderResumo(){
  resumoMeses.innerHTML=out+"</tbody></table></div>";
 }
 function backup(){
- const dados={despesas,historico,geradoEm:new Date().toISOString(),versao:"1.0"};
+ const dados={despesas,historico,fornecedores:lerFornecedores(),lancamentos:lerLancamentos(),geradoEm:new Date().toISOString(),versao:"2.0"};
  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(dados,null,2)],{type:"application/json"}));a.download="backup_despesas_"+hoje()+".json";a.click();
 }
 carregarFornecedores();carregarProdutosVendas();limparFormulario();renderPainel();
@@ -649,6 +638,7 @@ function lerLancamentos(){
 function salvarLancamentos(lista){
  localStorage.setItem(LANCAMENTOS_KEY,JSON.stringify(lista));
  renderLancamento();
+ sincronizarNuvem();
 }
 
 function dinheiroSeguro(v){
@@ -659,64 +649,6 @@ function removerLancamento(i){
  const lista=lerLancamentos();
  lista.splice(i,1);
  salvarLancamentos(lista);
-}
-
-function escaparHtml(valor){
- return String(valor??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
-function imprimirLancamento(){
- const lista=lerLancamentos();
- if(!lista.length){
-   alert("Não há despesas aguardando finalização para imprimir.");
-   return;
- }
- const win=window.open("","_blank");
- if(!win){alert("Permita pop-ups para imprimir o documento.");return;}
- const total=lista.reduce((s,d)=>s+(Number(d.valor)||0),0);
- const jose=lista.reduce((s,d)=>s+(Number(d.valorJose)||0),0);
- const willian=lista.reduce((s,d)=>s+(Number(d.valorWillian)||0),0);
- const fornecedores=[...new Set(lista.map(d=>d.fornecedor).filter(Boolean))];
- const linhas=lista.map((d,i)=>`<tr>
-   <td>${i+1}</td><td>${escaparHtml(new Date(d.data+"T00:00:00").toLocaleDateString("pt-BR"))}</td>
-   <td>${escaparHtml(d.fornecedor)}</td><td>${escaparHtml(d.nota||"—")}</td>
-   <td>${escaparHtml(d.categoria)}</td><td>${escaparHtml(d.produto)}</td>
-   <td class="num">${Number(d.quantidade)||1}</td><td class="num">${dinheiroSeguro(d.valor)}</td>
-   <td>${escaparHtml(d.responsabilidade||"")}</td>
-   <td class="num">${dinheiroSeguro(d.valorJose)}</td><td class="num">${dinheiroSeguro(d.valorWillian)}</td>
- </tr>`).join("");
- win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
- <title>Documento de Despesas - Controle Interno</title>
- <style>
- *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:12mm;font-size:11px}
- .topo{border:2px solid #222;padding:14px;text-align:center}.topo h1{font-size:19px;margin:0 0 5px}
- .sub{font-size:11px;letter-spacing:1px;font-weight:bold}.dados{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
- .bloco{border:1px solid #555;padding:9px;min-height:65px}.bloco b{display:block;margin-bottom:5px}
- .aviso{font-size:10px;color:#444;margin:8px 0}
- table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #555;padding:6px;text-align:left}
- th{background:#eaeaea;font-size:9px}td{font-size:9px}.num{text-align:right;white-space:nowrap}
- .totais{margin-top:12px;border:1px solid #333;padding:10px;display:flex;justify-content:space-between;font-weight:bold;font-size:12px}
- .assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:65px;text-align:center}
- .linha{border-top:1px solid #111;padding-top:7px;min-height:28px}.rodape{text-align:center;margin-top:28px;font-size:9px;color:#444}
- @page{size:A4 landscape;margin:10mm}
- </style></head><body>
- <div class="topo"><h1>DOCUMENTO DE CONTROLE DE DESPESAS</h1><div class="sub">DEMONSTRATIVO DE LANÇAMENTO — NÃO É NOTA FISCAL ELETRÔNICA</div></div>
- <div class="dados">
-  <div class="bloco"><b>RESPONSÁVEL PELO REGISTRO / COMPRADOR</b>WILLIAN ALVES DE SIQUEIRA</div>
-  <div class="bloco"><b>FORNECEDOR(ES) INFORMADO(S) NO LANÇAMENTO</b>${fornecedores.map(escaparHtml).join("<br>")}<br><small>Dados cadastrais adicionais do fornecedor não constam no sistema.</small></div>
-  <div class="bloco"><b>DATA DO DOCUMENTO</b>${new Date().toLocaleDateString("pt-BR")}</div>
-  <div class="bloco"><b>REFERÊNCIA</b>${lista.length} despesa(s) aguardando finalização</div>
- </div>
- <div class="aviso">Documento interno para conferência das despesas e divisão dos valores entre os participantes. Os números de nota fiscal abaixo são os informados no cadastro de cada despesa.</div>
- <table><thead><tr><th>Item</th><th>Data</th><th>Fornecedor</th><th>Nº NF informado</th><th>Categoria</th><th>Produto / descrição</th><th>Qtd.</th><th>Valor</th><th>Responsabilidade</th><th>Parte José</th><th>Parte Willian</th></tr></thead>
- <tbody>${linhas}</tbody></table>
- <div class="totais"><span>TOTAL GERAL: ${dinheiroSeguro(total)}</span><span>PARTE DE JOSÉ: ${dinheiroSeguro(jose)}</span><span>PARTE DE WILLIAN: ${dinheiroSeguro(willian)}</span></div>
- <div class="assinaturas">
-  <div class="linha">WILLIAN ALVES DE SIQUEIRA<br><small>Responsável pelo registro</small></div>
-  <div class="linha">JOSÉ GERALDO DE SIQUEIRA<br><small>Coparticipante das despesas — assinatura</small></div>
- </div>
- <div class="rodape">Documento de controle interno gerado pelo Sistema de Despesas. Não substitui DANFE ou NF-e emitida pelo fornecedor.</div>
- <script>window.onload=()=>window.print();<\/script></body></html>`);
- win.document.close();
 }
 
 function limparLancamento(){
@@ -833,6 +765,138 @@ function finalizarLancamento(){
 }
 
 renderLancamento();
+
+/* ===== LOGIN, CARGA INICIAL E SINCRONIZACAO FIREBASE ===== */
+let firebaseSessao=null;
+let nuvemPronta=false;
+let gravacaoPendente=false;
+let timerSincronizacao=null;
+
+function atualizarTelaAcesso(autenticado){
+ const login=document.getElementById("telaLogin");
+ const menu=document.getElementById("menuSistema");
+ const conteudo=document.getElementById("conteudoSistema");
+ login.style.display=autenticado?"none":"block";
+ menu.style.display=autenticado?"flex":"none";
+ conteudo.style.display=autenticado?"block":"none";
+ document.getElementById("status").textContent=autenticado?"● Conectado ao Firebase":"● Aguardando autenticação";
+}
+
+async function entrarFirebase(){
+ const msg=document.getElementById("loginMsg");
+ const email=document.getElementById("loginEmail").value.trim();
+ const senha=document.getElementById("loginSenha").value;
+ if(!email||!senha){msg.textContent="Informe seu e-mail e sua senha.";return;}
+ msg.textContent="Verificando acesso...";
+ try{
+  const fb=await window.firebaseDespesasReady;
+  if(!fb)throw new Error("Não foi possível iniciar a conexão com o Firebase.");
+  await fb.signInWithEmailAndPassword(fb.auth,email,senha);
+  msg.textContent="Acesso confirmado. Carregando dados...";
+ }catch(e){
+  console.error(e);
+  msg.textContent=(e.code==="auth/invalid-credential"||e.code==="auth/wrong-password"||e.code==="auth/user-not-found")
+   ?"E-mail ou senha incorretos."
+   :"Não foi possível entrar. Verifique a conexão e a configuração do Firebase.";
+ }
+}
+
+function mesclarRegistros(local,remoto,chave){
+ const mapa=new Map();
+ const adicionar=(item)=>{
+  if(!item||typeof item!=="object")return;
+  const id=item[chave];
+  const identificador=(id!==undefined&&id!==null&&String(id)!=="")?String(id):JSON.stringify(item);
+  mapa.set(identificador,item);
+ };
+ (Array.isArray(remoto)?remoto:Object.values(remoto||{})).forEach(adicionar);
+ (Array.isArray(local)?local:Object.values(local||{})).forEach(adicionar);
+ return [...mapa.values()];
+}
+
+async function carregarDadosNuvem(){
+ const fb=await window.firebaseDespesasReady;
+ const caminhos=["despesas","historico","fornecedores","lancamentos"];
+ const snapshots=await Promise.all(caminhos.map(c=>fb.get(fb.ref(fb.db,c))));
+ const valores=snapshots.map(x=>x.exists()?x.val():null);
+
+ despesas=mesclarRegistros(despesas,valores[0],"id");
+ historico=mesclarRegistros(historico,valores[1],"id");
+ const fornecedoresNuvem=Array.isArray(valores[2])?valores[2]:Object.values(valores[2]||{});
+ const fornecedores=[...new Set([...lerFornecedores(),...fornecedoresNuvem].map(x=>String(x).trim()).filter(Boolean))];
+ const pendentesNuvem=Array.isArray(valores[3])?valores[3]:Object.values(valores[3]||{});
+ const pendentes=mesclarRegistros(lerLancamentos(),pendentesNuvem,"idPendente");
+
+ localStorage.setItem(KEY,JSON.stringify(despesas));
+ localStorage.setItem(HISTKEY,JSON.stringify(historico));
+ localStorage.setItem(FORNECEDORES_KEY,JSON.stringify(fornecedores));
+ localStorage.setItem(LANCAMENTOS_KEY,JSON.stringify(pendentes));
+
+ carregarFornecedores();
+ renderPainel();
+ renderDespesas();
+ renderLancamento();
+ montarMeses();
+ renderRelatorio();
+ renderResumo();
+}
+
+async function sincronizarNuvem(){
+ if(!firebaseSessao||!nuvemPronta)return;
+ gravacaoPendente=true;
+ clearTimeout(timerSincronizacao);
+ timerSincronizacao=setTimeout(async()=>{
+  if(!firebaseSessao||!nuvemPronta)return;
+  gravacaoPendente=false;
+  try{
+   const fb=await window.firebaseDespesasReady;
+   await Promise.all([
+    fb.set(fb.ref(fb.db,"despesas"),despesas),
+    fb.set(fb.ref(fb.db,"historico"),historico),
+    fb.set(fb.ref(fb.db,"fornecedores"),lerFornecedores()),
+    fb.set(fb.ref(fb.db,"lancamentos"),lerLancamentos())
+   ]);
+   document.getElementById("status").textContent="● Sincronizado com a nuvem";
+  }catch(e){
+   console.error("Erro ao salvar no Firebase:",e);
+   document.getElementById("status").textContent="⚠️ Erro ao sincronizar. Confira a conexão e as regras.";
+  }
+ },500);
+}
+
+async function iniciarSessaoFirebase(user){
+ firebaseSessao=user;
+ atualizarTelaAcesso(true);
+ document.getElementById("status").textContent="● Carregando dados da nuvem...";
+ nuvemPronta=false;
+ try{
+  await carregarDadosNuvem();
+  nuvemPronta=true;
+  // A mesclagem preserva os dados locais e os dados já existentes na nuvem.
+  await sincronizarNuvem();
+  if(!gravacaoPendente)document.getElementById("status").textContent="● Conectado e sincronizado";
+ }catch(e){
+  console.error("Erro ao carregar dados:",e);
+  document.getElementById("status").textContent="⚠️ Não foi possível carregar a nuvem. Seus dados locais foram preservados.";
+ }
+}
+
+(async()=>{
+ const fb=await window.firebaseDespesasReady;
+ if(!fb){
+  document.getElementById("loginMsg").textContent="Não foi possível iniciar o Firebase. Atualize a página e tente novamente.";
+  return;
+ }
+ fb.onAuthStateChanged(fb.auth,user=>{
+  if(user)iniciarSessaoFirebase(user);
+  else{
+   firebaseSessao=null;
+   nuvemPronta=false;
+   atualizarTelaAcesso(false);
+  }
+ });
+})();
+
 
 </script>
 </body>
