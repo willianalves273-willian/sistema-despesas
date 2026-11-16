@@ -113,6 +113,7 @@ Nada é gravado como despesa finalizada até clicar em <b>FINALIZAR LANÇAMENTO<
 </div>
 
 <div class="actions">
+<button onclick="imprimirComprovanteLancamento()" class="sec">🖨️ Imprimir comprovante</button>
 <button onclick="finalizarLancamento()" class="green">✓ FINALIZAR LANÇAMENTO</button>
 <button onclick="limparLancamento()" class="sec">Limpar lançamento</button>
 <button onclick="mostrar('nova')" class="sec">+ Lançar outra despesa</button>
@@ -215,7 +216,7 @@ Você pode selecionar compras individuais, excluir um mês inteiro ou, em últim
 /* ===== FIREBASE: AUTENTICACAO E BANCO DE DADOS ===== */
 window.firebaseDespesasReady = (async()=>{
   try{
-    const [{initializeApp,getApps},{getDatabase,ref,get,set},{getAuth,signInWithEmailAndPassword,sendPasswordResetEmail,signOut,onAuthStateChanged}] = await Promise.all([
+    const [{initializeApp,getApps},{getDatabase,ref,get,set,onValue},{getAuth,signInWithEmailAndPassword,sendPasswordResetEmail,signOut,onAuthStateChanged,setPersistence,browserLocalPersistence}] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js"),
       import("https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js"),
       import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js")
@@ -231,7 +232,9 @@ window.firebaseDespesasReady = (async()=>{
     };
     const app=getApps().find(a=>a.name==="despesasApp")||initializeApp(firebaseConfig,"despesasApp");
     const db=getDatabase(app), auth=getAuth(app);
-    return {db,auth,ref,get,set,signInWithEmailAndPassword,sendPasswordResetEmail,signOut,onAuthStateChanged};
+    // Mantém a sessão neste navegador, inclusive após fechar e reabrir a página.
+    await setPersistence(auth,browserLocalPersistence);
+    return {db,auth,ref,get,set,onValue,signInWithEmailAndPassword,sendPasswordResetEmail,signOut,onAuthStateChanged};
   }catch(e){
     console.error("Falha ao iniciar Firebase:",e);
     return null;
@@ -242,7 +245,9 @@ window.firebaseDespesasReady = (async()=>{
 <script>
 const KEY="sistema_despesas_jose_willian_v1";
 const HISTKEY="sistema_despesas_historico_v1";
-let despesas=JSON.parse(localStorage.getItem(KEY)||"[]");
+const EXCLUIDAS_KEY="sistema_despesas_excluidas_v1";
+let excluidasDespesas=new Set(JSON.parse(localStorage.getItem(EXCLUIDAS_KEY)||"[]").map(String));
+let despesas=JSON.parse(localStorage.getItem(KEY)||"[]").filter(d=>!excluidasDespesas.has(String(d.id)));
 let historico=JSON.parse(localStorage.getItem(HISTKEY)||"[]");
 let editandoId=null;
 
@@ -437,7 +442,12 @@ function editar(id){
 }
 function excluir(id){
  if(!confirm("Excluir esta despesa da lista operacional? O histórico permanente NÃO será apagado."))return;
- despesas=despesas.filter(x=>x.id!==id);salvar();renderDespesas();renderPainel();
+ // Registra a exclusão como tombstone para que uma cópia antiga de outro
+ // aparelho não faça a despesa reaparecer durante a sincronização.
+ excluidasDespesas.add(String(id));
+ localStorage.setItem(EXCLUIDAS_KEY,JSON.stringify([...excluidasDespesas]));
+ despesas=despesas.filter(x=>String(x.id)!==String(id));
+ salvar();renderDespesas();renderPainel();
 }
 function descricao(d){return `${d.produto}${d.nota?`<br><small>NF: ${d.nota}</small>`:""}`}
 function renderDespesas(){
@@ -691,7 +701,7 @@ function renderLancamento(){
 
  if(!lista.length){
    resumo.innerHTML="<b>Nenhuma despesa aguardando lançamento.</b>";
-   pix.innerHTML="<b>Acerto via PIX:</b> José deve devolver para Willian: <b>R$ 0,00</b>";
+   pix.style.color="#b91c1c";pix.style.borderColor="#b91c1c";pix.innerHTML="<b>ACERTO VIA PIX:</b> José deve devolver para Willian: <b>R$ 0,00</b>";
    return;
  }
 
@@ -701,9 +711,56 @@ function renderLancamento(){
    " &nbsp; José: <b>"+dinheiroSeguro(jose)+"</b>"+
    " &nbsp; Willian: <b>"+dinheiroSeguro(willian)+"</b>";
 
+ pix.style.color="#b91c1c";pix.style.borderColor="#b91c1c";
  pix.innerHTML=
-   "<b>Acerto via PIX:</b> José deve devolver para Willian: "+
+   "<b>ACERTO VIA PIX:</b> José deve devolver para Willian: "+
    "<b>"+dinheiroSeguro(jose)+"</b>";
+}
+
+function escaparHtmlComprovante(valor){
+ return String(valor??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#39;"}[c]));
+}
+
+function imprimirComprovanteLancamento(){
+ const lista=lerLancamentos();
+ if(!lista.length){alert("Não há despesas no lançamento para imprimir.");return;}
+ const total=lista.reduce((s,d)=>s+(Number(d.valor)||0),0);
+ const jose=lista.reduce((s,d)=>s+(Number(d.valorJose)||0),0);
+ const willian=lista.reduce((s,d)=>s+(Number(d.valorWillian)||0),0);
+ const dataEmissao=new Date().toLocaleString("pt-BR");
+ const linhas=lista.map((d,i)=>`<tr>
+  <td>${i+1}</td><td>${escaparHtmlComprovante(d.data?new Date(d.data+"T00:00:00").toLocaleDateString("pt-BR"):"")}</td>
+  <td>${escaparHtmlComprovante(d.fornecedor)}</td><td>${escaparHtmlComprovante(d.nota||"—")}</td>
+  <td>${escaparHtmlComprovante(d.produto)}</td><td class="num">${Number(d.quantidade)||1}</td>
+  <td class="num">${dinheiroSeguro(d.valor)}</td><td>${escaparHtmlComprovante(d.responsabilidade||"")}</td>
+  <td class="num">${dinheiroSeguro(d.valorJose)}</td><td class="num">${dinheiroSeguro(d.valorWillian)}</td>
+ </tr>`).join("");
+ const win=window.open("","_blank");
+ if(!win){alert("Permita pop-ups para imprimir o comprovante.");return;}
+ win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante de Despesas</title><style>
+ *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;margin:0;font-size:11px}
+ .folha{width:100%;max-width:190mm;margin:0 auto}.topo{border:2px solid #222;padding:12px;margin-bottom:9px}
+ h1{font-size:20px;text-align:center;margin:0 0 4px}h2{font-size:13px;text-align:center;margin:0;font-weight:normal}
+ .faixa{border:1px solid #333;padding:7px;margin:8px 0;font-weight:bold;text-align:center}
+ .dados{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}.campo{border:1px solid #777;padding:7px;min-height:32px}
+ table{width:100%;border-collapse:collapse;margin-top:9px;font-size:9px}th,td{border:1px solid #555;padding:5px;vertical-align:top}th{background:#e8e8e8;text-align:center}.num{text-align:right;white-space:nowrap}
+ .totais{margin-top:10px;border:1px solid #333;padding:9px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-weight:bold}
+ .pix{margin-top:12px;border:2px solid #b91c1c;color:#b91c1c;padding:10px;font-size:14px;font-weight:bold;text-align:center}
+ .assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:48px;text-align:center}.linha{border-top:1px solid #222;padding-top:6px}
+ .rodape{text-align:center;margin-top:18px;font-size:9px;color:#444}
+ @page{size:A4 portrait;margin:10mm}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+ </style></head><body><main class="folha">
+ <div class="topo"><h1>COMPROVANTE DE DESPESAS</h1><h2>Demonstrativo de compras e coparticipação — documento interno, não fiscal</h2></div>
+ <div class="dados"><div class="campo"><b>EMITIDO EM:</b> ${dataEmissao}</div><div class="campo"><b>QUANTIDADE DE ITENS:</b> ${lista.length}</div>
+ <div class="campo"><b>PARTICIPANTE:</b> WILLIAN ALVES DE SIQUEIRA</div><div class="campo"><b>COPARTICIPANTE:</b> JOSE GERALDO DE SIQUEIRA</div></div>
+ <div class="faixa">RELAÇÃO DISCRIMINADA DAS DESPESAS</div>
+ <table><thead><tr><th>Item</th><th>Data</th><th>Fornecedor</th><th>Nota</th><th>Produto</th><th>Qtd.</th><th>Valor</th><th>Responsabilidade</th><th>José</th><th>Willian</th></tr></thead><tbody>${linhas}</tbody></table>
+ <div class="totais"><div>TOTAL GERAL<br>${dinheiroSeguro(total)}</div><div>PARTE DE JOSÉ<br>${dinheiroSeguro(jose)}</div><div>PARTE DE WILLIAN<br>${dinheiroSeguro(willian)}</div></div>
+ <div class="pix">ACERTO VIA PIX<br>JOSÉ GERALDO DE SIQUEIRA deverá devolver a WILLIAN ALVES DE SIQUEIRA:<br>${dinheiroSeguro(jose)}</div>
+ <div class="assinaturas"><div class="linha">WILLIAN ALVES DE SIQUEIRA<br>Responsável pelas despesas</div><div class="linha">JOSE GERALDO DE SIQUEIRA<br>Coparticipante das despesas</div></div>
+ <div class="rodape">Comprovante interno para conferência e acerto entre os participantes. Não substitui documento fiscal.</div>
+ </main><script>window.onload=()=>window.print()<\/script></body></html>`);
+ win.document.close();
 }
 
 function finalizarLancamento(){
@@ -843,13 +900,27 @@ function mesclarRegistros(local,remoto,chave){
  return [...mapa.values()];
 }
 
+function separarDespesasNuvem(valor){
+ const lista=Array.isArray(valor)?valor:(valor&&typeof valor==="object"?Object.values(valor):[]);
+ const marcadores=lista.filter(x=>x&&x._excluida===true&&x.id!==undefined).map(x=>String(x.id));
+ const registros=lista.filter(x=>x&&x._excluida!==true);
+ return {registros,marcadores};
+}
+function dadosDespesasParaNuvem(){
+ const marcadores=[...excluidasDespesas].map(id=>({id,_excluida:true}));
+ return [...despesas.filter(d=>!excluidasDespesas.has(String(d.id))),...marcadores];
+}
+
 async function carregarDadosNuvem(){
  const fb=await window.firebaseDespesasReady;
  const caminhos=["despesas","historico","fornecedores","lancamentos"];
  const snapshots=await Promise.all(caminhos.map(c=>fb.get(fb.ref(fb.db,c))));
  const valores=snapshots.map(x=>x.exists()?x.val():null);
 
- despesas=mesclarRegistros(despesas,valores[0],"id");
+ const despesasNuvem=separarDespesasNuvem(valores[0]);
+ despesasNuvem.marcadores.forEach(id=>excluidasDespesas.add(id));
+ localStorage.setItem(EXCLUIDAS_KEY,JSON.stringify([...excluidasDespesas]));
+ despesas=mesclarRegistros(despesas,despesasNuvem.registros,"id").filter(d=>!excluidasDespesas.has(String(d.id)));
  historico=mesclarRegistros(historico,valores[1],"id");
  const fornecedoresNuvem=Array.isArray(valores[2])?valores[2]:Object.values(valores[2]||{});
  const fornecedores=[...new Set([...lerFornecedores(),...fornecedoresNuvem].map(x=>String(x).trim()).filter(Boolean))];
@@ -877,7 +948,7 @@ async function sincronizarNuvemImediatamente(){
  // Sincronização inicial obrigatória: grava os quatro conjuntos imediatamente,
  // sem aguardar o temporizador utilizado nas alterações comuns.
  await Promise.all([
-  fb.set(fb.ref(fb.db,"despesas"),despesas),
+  fb.set(fb.ref(fb.db,"despesas"),dadosDespesasParaNuvem()),
   fb.set(fb.ref(fb.db,"historico"),historico),
   fb.set(fb.ref(fb.db,"fornecedores"),lerFornecedores()),
   fb.set(fb.ref(fb.db,"lancamentos"),lerLancamentos())
@@ -896,7 +967,7 @@ async function sincronizarNuvem(){
   try{
    const fb=await window.firebaseDespesasReady;
    await Promise.all([
-    fb.set(fb.ref(fb.db,"despesas"),despesas),
+    fb.set(fb.ref(fb.db,"despesas"),dadosDespesasParaNuvem()),
     fb.set(fb.ref(fb.db,"historico"),historico),
     fb.set(fb.ref(fb.db,"fornecedores"),lerFornecedores()),
     fb.set(fb.ref(fb.db,"lancamentos"),lerLancamentos())
@@ -907,6 +978,46 @@ async function sincronizarNuvem(){
    document.getElementById("status").textContent="⚠️ Erro ao sincronizar. Confira a conexão e as regras.";
   }
  },500);
+}
+
+let ouvintesNuvemAtivos=false;
+function iniciarOuvintesNuvem(){
+ if(ouvintesNuvemAtivos)return;
+ ouvintesNuvemAtivos=true;
+ const aplicar=(caminho,processar)=>{
+  const fbPromise=window.firebaseDespesasReady;
+  fbPromise.then(fb=>{
+   if(!fb||!firebaseSessao)return;
+   fb.onValue(fb.ref(fb.db,caminho),snap=>{
+    if(!firebaseSessao||!nuvemPronta)return;
+    try{
+     processar(snap.exists()?snap.val():null);
+     carregarFornecedores();renderPainel();renderDespesas();renderLancamento();montarMeses();renderRelatorio();renderResumo();
+     document.getElementById("status").textContent="● Atualizado em tempo real";
+    }catch(e){console.error("Falha ao aplicar atualização em tempo real:",caminho,e);}
+   },e=>{
+    console.error("Falha no ouvinte Firebase:",caminho,e);
+    document.getElementById("status").textContent="⚠️ Falha na atualização em tempo real ("+(e?.code||"erro")+")";
+   });
+  }).catch(e=>console.error("Falha ao iniciar ouvinte:",caminho,e));
+ };
+ const aplicarLista=(atual,valor,chave)=>{
+  const nova=Array.isArray(valor)?valor:(valor&&typeof valor==="object"?Object.values(valor):[]);
+  if(JSON.stringify(atual)!==JSON.stringify(nova))return nova;
+  return atual;
+ };
+ aplicar("despesas",v=>{
+  const separadas=separarDespesasNuvem(v);
+  separadas.marcadores.forEach(id=>excluidasDespesas.add(id));
+  localStorage.setItem(EXCLUIDAS_KEY,JSON.stringify([...excluidasDespesas]));
+  const n=separadas.registros.filter(d=>!excluidasDespesas.has(String(d.id)));
+  if(JSON.stringify(despesas)!==JSON.stringify(n)){
+   despesas=n;localStorage.setItem(KEY,JSON.stringify(despesas));
+  }
+ });
+ aplicar("historico",v=>{const n=aplicarLista(historico,v,"id");if(n!==historico){historico=n;localStorage.setItem(HISTKEY,JSON.stringify(historico));}});
+ aplicar("fornecedores",v=>{const n=aplicarLista(lerFornecedores(),v,"nome");const normal=[...new Set([...FORNECEDORES_PADRAO,...n].map(x=>String(x).trim()).filter(Boolean))];localStorage.setItem(FORNECEDORES_KEY,JSON.stringify(normal));});
+ aplicar("lancamentos",v=>{const n=aplicarLista(lerLancamentos(),v,"idPendente");if(JSON.stringify(lerLancamentos())!==JSON.stringify(n)){localStorage.setItem(LANCAMENTOS_KEY,JSON.stringify(n));}});
 }
 
 async function iniciarSessaoFirebase(user){
@@ -929,6 +1040,7 @@ async function iniciarSessaoFirebase(user){
    uidSessaoCarregada=user.uid;
    // A mesclagem preserva os dados locais e os dados já existentes na nuvem.
    await sincronizarNuvemImediatamente();
+   iniciarOuvintesNuvem();
   }catch(e){
    console.error("Erro ao carregar dados:",e);
    document.getElementById("status").textContent="⚠️ Não foi possível carregar a nuvem. Seus dados locais foram preservados.";
