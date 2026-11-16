@@ -870,6 +870,22 @@ async function carregarDadosNuvem(){
  renderResumo();
 }
 
+async function sincronizarNuvemImediatamente(){
+ if(!firebaseSessao)throw new Error("Sessão Firebase não autenticada.");
+ const fb=await window.firebaseDespesasReady;
+ if(!fb)throw new Error("Firebase não inicializado.");
+ // Sincronização inicial obrigatória: grava os quatro conjuntos imediatamente,
+ // sem aguardar o temporizador utilizado nas alterações comuns.
+ await Promise.all([
+  fb.set(fb.ref(fb.db,"despesas"),despesas),
+  fb.set(fb.ref(fb.db,"historico"),historico),
+  fb.set(fb.ref(fb.db,"fornecedores"),lerFornecedores()),
+  fb.set(fb.ref(fb.db,"lancamentos"),lerLancamentos())
+ ]);
+ gravacaoPendente=false;
+ document.getElementById("status").textContent="● Conectado e sincronizado";
+}
+
 async function sincronizarNuvem(){
  if(!firebaseSessao||!nuvemPronta)return;
  gravacaoPendente=true;
@@ -912,8 +928,7 @@ async function iniciarSessaoFirebase(user){
    nuvemPronta=true;
    uidSessaoCarregada=user.uid;
    // A mesclagem preserva os dados locais e os dados já existentes na nuvem.
-   await sincronizarNuvem();
-   if(!gravacaoPendente)document.getElementById("status").textContent="● Conectado e sincronizado";
+   await sincronizarNuvemImediatamente();
   }catch(e){
    console.error("Erro ao carregar dados:",e);
    document.getElementById("status").textContent="⚠️ Não foi possível carregar a nuvem. Seus dados locais foram preservados.";
