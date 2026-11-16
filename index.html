@@ -771,6 +771,8 @@ let firebaseSessao=null;
 let nuvemPronta=false;
 let gravacaoPendente=false;
 let timerSincronizacao=null;
+let uidSessaoCarregada=null;
+let promessaCargaSessao=null;
 
 function atualizarTelaAcesso(autenticado){
  const login=document.getElementById("telaLogin");
@@ -791,8 +793,12 @@ async function entrarFirebase(){
  try{
   const fb=await window.firebaseDespesasReady;
   if(!fb)throw new Error("Não foi possível iniciar o Firebase. Verifique a configuração do projeto.");
-  await fb.signInWithEmailAndPassword(fb.auth,email,senha);
+  const credencial=await fb.signInWithEmailAndPassword(fb.auth,email,senha);
   msg.textContent="Acesso confirmado. Carregando dados...";
+  // Inicia a sessão diretamente após o login confirmado. O observador abaixo
+  // continua ativo para restaurar sessões em recargas, sem duplicar a carga.
+  await iniciarSessaoFirebase(credencial.user);
+  msg.textContent="Acesso confirmado.";
  }catch(e){
   console.error("Falha no login Firebase:",e);
   const cod=e?.code||"";
@@ -888,20 +894,34 @@ async function sincronizarNuvem(){
 }
 
 async function iniciarSessaoFirebase(user){
+ if(!user)return;
+ // Evita duas cargas simultâneas: o login direto e o observador do Firebase
+ // podem avisar sobre o mesmo usuário quase ao mesmo tempo.
+ if(firebaseSessao?.uid===user.uid && (nuvemPronta || promessaCargaSessao)){
+  atualizarTelaAcesso(true);
+  if(promessaCargaSessao) await promessaCargaSessao;
+  return;
+ }
  firebaseSessao=user;
  atualizarTelaAcesso(true);
  document.getElementById("status").textContent="● Carregando dados da nuvem...";
  nuvemPronta=false;
- try{
-  await carregarDadosNuvem();
-  nuvemPronta=true;
-  // A mesclagem preserva os dados locais e os dados já existentes na nuvem.
-  await sincronizarNuvem();
-  if(!gravacaoPendente)document.getElementById("status").textContent="● Conectado e sincronizado";
- }catch(e){
-  console.error("Erro ao carregar dados:",e);
-  document.getElementById("status").textContent="⚠️ Não foi possível carregar a nuvem. Seus dados locais foram preservados.";
- }
+ promessaCargaSessao=(async()=>{
+  try{
+   await carregarDadosNuvem();
+   nuvemPronta=true;
+   uidSessaoCarregada=user.uid;
+   // A mesclagem preserva os dados locais e os dados já existentes na nuvem.
+   await sincronizarNuvem();
+   if(!gravacaoPendente)document.getElementById("status").textContent="● Conectado e sincronizado";
+  }catch(e){
+   console.error("Erro ao carregar dados:",e);
+   document.getElementById("status").textContent="⚠️ Não foi possível carregar a nuvem. Seus dados locais foram preservados.";
+  }finally{
+   promessaCargaSessao=null;
+  }
+ })();
+ await promessaCargaSessao;
 }
 
 (async()=>{
@@ -914,6 +934,8 @@ async function iniciarSessaoFirebase(user){
   if(user)iniciarSessaoFirebase(user);
   else{
    firebaseSessao=null;
+   uidSessaoCarregada=null;
+   promessaCargaSessao=null;
    nuvemPronta=false;
    atualizarTelaAcesso(false);
   }
